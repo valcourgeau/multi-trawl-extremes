@@ -1,4 +1,4 @@
-setwd("C:/Users/Valentin/Documents/MRes/Data")
+setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/data")
 col_names <- c("Date", "Time",
                "O3", "Status O3",
                "NO", "Status NO",
