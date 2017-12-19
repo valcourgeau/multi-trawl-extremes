@@ -338,6 +338,8 @@ library(fExtremes)
   result_param[4*(0:4) + 4,]
   
   #write.csv(result_param, "result_on_10000_pts.csv")
+  result_param <- read.csv("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/results/tawn/result_on_10000_pts.csv")
+  result_param <- matrix(as.matrix(result_param[,-1]), ncol = 4)
   
   # page 519: bootstrap convex hull?
   res$counts
