@@ -73,16 +73,27 @@ pairwise_00_exp <- function(t1, t2, alpha, beta, kappa, rho){
 }
 
 # Example
-rho <- 0.3
-t1 <- 0.1
-t2 <- 0.3
+t1 <- 0.0
+t2 <- 1.0
+alpha <- -1.0
+beta <- 10
+rho <- 1.0
+kappa <- 1.0
 B1 <- compute_B1_exp(rho, t1, t2)
 B2 <- compute_B_inter_exp(rho, t1, t2)
 B3 <- compute_B3_exp(rho, t1, t2)
 
-pairwise_00_1(1.0, 12.0, 12.0)
-pairwise_00_2(t1,t2,alpha = 1.0, beta=12.0, kappa=12., rho=rho, B1, B2, B3)
-pairwise_00_exp(t1, t2, 1.0, 12.0, 12, rho)
+pairwise_00_exp(t1 = t1, t2 = t2, 
+                alpha = alpha, beta = beta, 
+                kappa = kappa, rho = rho)
+answer <- 1 - 2 * (1 + 0.1) + (1 + 0.1)^{B1 + B3}*(1 + 0.2)^{B2}
+
+alpha <- 1.0
+pairwise_00_exp(t1 = t1, t2 = t2, 
+                alpha = alpha, beta = beta, 
+                kappa = kappa, rho = rho)
+answer <- 1 - 2 * (1 + 0.1)^{-1} + (1 + 0.1)^{-B1 - B3}*(1 + 0.2)^{-B2}
+answer
 
 # Case 1-0
 pairwise_10_1 <- function(t1, x1, t2, alpha, beta, kappa, rho, trawlA){
@@ -121,6 +132,7 @@ pairwise_10_exp <- function(t1, x1, t2, alpha, beta, kappa, rho, transformation=
     sigma_mt <- abs(beta/alpha)
     inv_x <- inv_g(x1, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
     jacobian <- evir::dgpd(x1, xi = xi_mt, beta = sigma_mt) / evir::dgpd(inv_x, xi = 1, beta = 1+kappa)
+    jacobian <- 1.0/jacobian
     new_x <- inv_x
   }else{
     new_x <- x1
@@ -147,7 +159,31 @@ pairwise_10_exp <- function(t1, x1, t2, alpha, beta, kappa, rho, transformation=
 }
 
 # Example
-pairwise_10_exp(t1=0.1,x1=2.0,t2=0.3,alpha=1.1,beta=0.2,kappa=0.5,rho=0.2)
+t1 <- 0.0
+t2 <- 1.0
+x1 <- 1.0
+alpha <- -1.0
+beta <- 10
+rho <- 1.0
+kappa <- 1.0
+B1 <- compute_B1_exp(rho, t1, t2)
+B2 <- compute_B_inter_exp(rho, t1, t2)
+B3 <- compute_B3_exp(rho, t1, t2)
+
+pairwise_10_exp(t1 = t1, t2 = t2,
+                x1 = x1,
+                alpha = alpha, beta = beta,
+                kappa = kappa, rho = rho)
+answer <- -1/10 * (1+2/10)^{0} + 1/10*(1+2/10)^{B1-1}*(1+3/10)^{B2-1}*(1+0.1)^{B3}*((B1+B2)*(1+0.2)+B1/10)
+answer
+
+alpha <- 1.0
+pairwise_10_exp(t1 = t1, t2 = t2,
+                x1 = x1,
+                alpha = alpha, beta = beta,
+                kappa = kappa, rho = rho)
+answer <- 1/10 * (1+2/10)^{-B1-B2-1} - 1/10*(1+2/10)^{-B1-1}*(1+3/10)^{-B2-1}*(1+0.1)^{-B3}*((B1+B2)*(1+0.2)+B1/10)
+answer
 
 # Case 1-1
 
@@ -196,7 +232,7 @@ pairwise_11_2 <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, B1, B2, B3){
   return(temp)
 }
 
-pairwise_11_exp <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation=F, epsilon=1e-6){
+pairwise_11_exp <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation=F, epsilon=1e-8){
   # Marginal Transformation
   if(transformation){
     xi_mt <- 1/alpha
@@ -208,6 +244,8 @@ pairwise_11_exp <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformat
     jacobian1 <- evir::dgpd(x1, xi = xi_mt, beta = sigma_mt) / (evir::dgpd(inv_x1, xi = 1, beta = 1+kappa) + epsilon)
     jacobian2 <- evir::dgpd(x2, xi = xi_mt, beta = sigma_mt) / (evir::dgpd(inv_x2, xi = 1, beta = 1+kappa) + epsilon)
     temp <- jacobian1 * jacobian2
+    #temp <- 1.0
+    temp <- 1/temp
   }else{
     new_x1 <- x1
     new_x2 <- x2
@@ -229,15 +267,38 @@ pairwise_11_exp <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformat
   return(temp)
 }
 
+# Example
+t1 <- 0.0
+t2 <- 1.0
+x1 <- 1.0
+x2 <- 2.0
+alpha <- -1.0
+beta <- 10
+rho <- 1.0
+kappa <- 1.0
+B1 <- compute_B1_exp(rho, t1, t2)
+B2 <- compute_B_inter_exp(rho, t1, t2)
+B3 <- compute_B3_exp(rho, t1, t2)
+
+pairwise_11_exp(t1 = t1, x1 = x1,
+                t2 = t2, x2 = x2,
+                alpha = alpha, beta = beta,
+                rho = rho, kappa = kappa)
+
+answer <- 1/100*(1+0.2)^{B1-1}*(1+0.5)^{B2-1}*(1+3/10)^{B3-1}
+answer <- answer * (B1*B2*(1+0.5)*(1+0.3)+B1*B3*(1+0.5)^2
+  +B2*(B2-1)*(1+0.2)*(1+0.3)+B2*B3*(1+0.2)*(1+0.5))
+answer
+
 pairwise_likelihood_single_pair <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation=F){
-  if(x1 == 0.0){
-    if(x2 == 0.0){
+  if(x1 < 1e-16){
+    if(x2 < 1e-16){
       return(pairwise_00_exp(t1, t2, alpha, beta, kappa, rho))  
     }else{
       return(pairwise_10_exp(t2, x2, t1, alpha, beta, kappa, rho, transformation))
     }
   }else{
-    if(x2 == 0.0){
+    if(x2 < 1e-16){
       return(pairwise_10_exp(t1, x1, t2, alpha, beta, kappa, rho, transformation))
     }else{
       return(pairwise_11_exp(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation))
@@ -254,11 +315,17 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
   values <- values[ok_ind]
   times <- times[ok_ind]
   k <- length(values)
+  
   temp <- 0.0
   upper <- pmin(1:(k-1)+delta, k)
   lower <- 2:k
+  
+  accepted <- 0
+  total <- 0
   for(i in 1:(k-1)){
     ind <- (lower[i]):(upper[i])
+    m <- 0
+    total <- total + length(ind)
     for(j in ind){
       warnon <- pairwise_likelihood_single_pair(times[i], values[i], 
                                                 times[j], values[j],
@@ -268,17 +335,24 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
                                                 rho = rho, 
                                                 transformation=transformation)
       if(!is.na(warnon) & !is.nan(warnon)){
-        if(warnon > 1e-6){
+        if(warnon > 0.0){
+          # log the result
+          accepted <- accepted + 1
           temp <- temp + log(warnon)
         }else{
           if(warnon >= 0.0){
-            temp <- temp + log(1e-16)
+            temp <- temp - 1000
           }
         }
       }
     }
+    
+    if(temp > 1e14 | abs(temp) == Inf){
+      temp <- 1e10
+    }
   }
   
+  cat("Accepted: ", accepted/total, "\n")
   if(logscale){
     return(temp)
   }else{
@@ -288,12 +362,13 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
 
 pl_single_all_params <- function(times, values, delta, params, logscale=T, transformation=F){
   return(pairwise_likelihood_single_full(times, values, 
-                                         alpha=1/params[1], 
-                                         beta=params[2]/params[1], 
-                                         kappa=params[4], 
-                                         rho=params[3], 
+                                         alpha=1/exp(params[1]), 
+                                         beta=abs(exp(params[2])/exp(params[1])), 
+                                         kappa=exp(params[4]), 
+                                         rho=exp(params[3]), 
                                          delta=delta, 
-                                         logscale=T, transformation=transformation))
+                                         logscale=T, 
+                                         transformation=transformation))
 }
 
 pl_final <- function(times, values, deltas, params, logscale=T){
@@ -314,6 +389,20 @@ pl_final <- function(times, values, deltas, params, logscale=T){
                                         transformation=trf)
   }
   
+  if(logscale){
+    return(temp)
+  }else{
+    return(exp(temp))
+  }
+}
+
+pl_final_univ <- function(times, values, delta, params, trf=T, logscale=T){
+  temp <- pl_single_all_params(times = times, 
+                               values = values,
+                               delta = delta, 
+                               params = params,
+                               transformation=trf)
+
   if(logscale){
     return(temp)
   }else{

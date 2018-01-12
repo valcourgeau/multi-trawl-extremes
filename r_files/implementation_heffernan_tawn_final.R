@@ -365,18 +365,6 @@ library(fExtremes)
   
   
   # Given O3
-  a_given_1 <- result_param[1,]
-  b_given_1 <- result_param[2,]
-  
-  a_given_1y <- matrix(rep(gb[gb_tail[1][[1]], 2], 4), ncol=4)*rep(a_given_1, length(gb_tail[1][[1]]))
-  b_given_1y <- t(t(matrix(rep(gb[gb_tail[1][[1]], 2], 4), ncol=4))^rep(b_given_1, length(gb_tail[1][[1]])))
-  
-  par(mfrow=c(1,4), mai=c(.9,0.8,0.3,0.1))
-  for(i in 1:4)
-    plot(a_given_1y[,i], b_given_1y[,i])
-  par(mfrow=c(1,1), mai=c(.9,0.8,0.3,0.1))
-  # write.csv(a_given_1y, file = "a_given_1y.csv")
-  # write.csv(b_given_1y, file = "b_given_1y.csv")
   
   cor(a_given_1y, b_given_1y)
   
