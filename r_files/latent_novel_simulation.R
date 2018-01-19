@@ -100,38 +100,71 @@ slice_area <- function(i, j, times, trawl_f_prim){
   return(temp)
 }
 
-trawl_slice_sets <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
+trawl_slice_sets_not_optim <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
   times <- sort(times)
   A <- trawl_f(NA)$A
   slice_mat <- matrix(0, nrow = length(times), ncol = length(times))
+  gamma_sim <- matrix(0, length(times) * length(times), ncol= n)
   for(i in 1:length(times)){
     for(j in i:length(times)){
       slice_mat[i,j] <- slice_area(i, j, times, trawl_f_prim)
+      gamma_sim[(i-1) * length(times) + j,] <- rgamma(shape = alpha * slice_mat[i,j] / A,
+                                                      rate = beta,
+                                                      n = n)
+
     }
   }
-  
+
   results <- matrix(0, nrow = length(times), ncol = n)
-  for(i in 1:length(times)){
-    for(j in (i+1):length(times)){
-      if(j <= length(times)){
-        results[i,] <- results[i,] + rgamma(shape = alpha * slice_mat[i,j] / A,
-                                            rate = beta,
-                                            n = n)
+  for(current_trawl in 1:length(times)){
+    for(back_trawl in max(1, current_trawl-8+1):current_trawl){
+      for(slice_piece in (current_trawl):(length(times))){
+        if(back_trawl != current_trawl | slice_piece > current_trawl){
+          if(current_trawl == (length(times)-2)){
+            print(slice_piece)
+            
+          }
+          results[current_trawl,] <- results[current_trawl,] + gamma_sim[(back_trawl-1) * length(times) + slice_piece,]
+        }
       }
     }
   }
   
-  for(i in 1:(length(times)-1)){
-    results[i+1,] <- results[i+1,] + results[i,]
-    results[i,] <- results[i,] + rgamma(shape = alpha * slice_mat[i,i] / A,
-                                        rate = beta,
-                                        n = n)
+  for(i in 1:(length(times))){
+    results[i,] <- results[i,] + gamma_sim[(i-1) * length(times) + i,]
   }
   
-  results[length(times),] <- results[length(times), ] + rgamma(shape = alpha * slice_mat[length(times),length(times)] / A,
+  #results[length(times),] <- results[length(times), ] + gamma_sim[(length(times)-1) * length(times) + length(times),]
+  
+  return(results)
+}
+
+trawl_slice_sets <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
+  times <- sort(times)
+  trawl_info <- trawl_f(NA)
+  A <- trawl_info$A
+  results <- matrix(0, nrow = length(times), ncol = n)
+  
+  for(i in 1:length(times)){
+    max_index <- suppressWarnings(min(length(times), min(which(times - times[i] > trawl_info$time_eta))))
+    for(j in (i+1):length(times)){
+      if(j <= length(times)){
+        results[i,] <- results[i,] + rgamma(shape = alpha * slice_area(i, j, times, trawl_f_prim) / A,
+                                            rate = beta,
+                                            n = n)
+      }
+    }
+    if(i < length(times)){
+      results[i+1,] <- results[i+1,] + results[i,]
+      results[i,] <- results[i,] + rgamma(shape = alpha * slice_area(i, i, times, trawl_f_prim) / A,
+                                          rate = beta,
+                                          n = n)
+    }
+  }
+  
+  results[length(times),] <- results[length(times), ] + rgamma(shape = alpha * slice_area(length(times), length(times), times, trawl_f_prim) / A,
                                                                rate = beta,
                                                                n = n)
-  
   return(results)
 }
 
@@ -155,7 +188,7 @@ rltrawl <- function(alpha, beta, times, trawl_f, trawl_f_prim, n, kappa = 0, tra
 }
 
 # Example
-alpha <- 0.7
+alpha <- 1.7
 beta <- 8
 t <- 2
 rho <- 3
@@ -165,16 +198,54 @@ trawl_1 <- trawl_exp(t, rho)
 trawl_1_prim <- trawl_exp_primitive(t, rho)
 plot(-100:100/10, trawl_1(-100:100/10))
 l <- trawl_deterministic(trawl_1, alpha = alpha, beta = beta, dt = dtime, n=1)
-hist(l)
-hist(rgamma(shape = alpha, rate = beta, n=50))
+# hist(l)
+# hist(rgamma(shape = alpha, rate = beta, n=50))
 
 
-times <- c(1,2,3,4,5,6)
-slsl <- trawl_slice_sets(alpha = alpha,
-                 beta = beta,
-                 times = times,
-                 trawl_1,
-                 trawl_1_prim,
-                 1000)
-hist(slsl[1,])
-hist(rgamma(shape = alpha, rate = beta, 1000))
+times <- 1:100
+# system.time(
+# trawl_optim <- trawl_slice_sets(alpha = alpha,
+#                  beta = beta,
+#                  times = times,
+#                  trawl_1,
+#                  trawl_1_prim,
+#                  1000))
+system.time(
+  trawl_not_optim <- trawl_slice_sets_not_optim(alpha = alpha,
+                                  beta = beta,
+                                  times = times,
+                                  trawl_1,
+                                  trawl_1_prim,
+                                  100))
+
+plot(density(trawl_optim[,1]))
+
+
+
+plot(density(trawl_not_optim[10,]))
+lines(density(rgamma(shape = alpha, rate = beta, 100000)), col ="red")
+
+hist(trawl_optim[10,])
+hist(trawl_not_optim[10,])
+hist(rgamma(shape = alpha, rate = beta, 100000))
+plot(trawl_not_optim[,1], type = "l")
+
+plot(trawl_not_optim[,1], type = 'l')
+
+plot(density(rgamma(shape = alpha, rate = beta, 100000)), col ="red")
+for(i in 1:10){
+  lines(density(trawl_not_optim[i,]))
+}
+
+{
+  kappa <- 12
+  unif_samples <- runif(n=length(times))
+  X <- rep(0, length(times))
+  prob_zero <- 1-exp(-kappa * trawl_not_optim[,1])
+  which_zero <- which(prob_zero > unif_samples)
+  for(non_zero in which_zero){
+    X[non_zero] <- rexp(1, trawl_not_optim[non_zero,1])
+  }
+  acf(X)
+  cat("non zero probability:", (1+kappa/beta)^{-alpha})
+}
