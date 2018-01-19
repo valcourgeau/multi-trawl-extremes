@@ -47,8 +47,8 @@
         x_to_work_on <- dataset[,i]
         fit <- evir::gpd(x_to_work_on, method = "ml", threshold = quantiles[i])
         #print(fit@fit$par.ests)
-        params[(4*(i-1)+1):(4*(i-1)+2)] <- log(fit$par.ests)
-        params[(4*(i-1)+2)] <- log(params[(4*(i-1)+2)])
+        params[(4*(i-1)+1):(4*(i-1)+2)] <- (fit$par.ests)
+        #params[(4*(i-1)+2)] <- log(params[(4*(i-1)+2)])
         alpha <- params[4*(i-1)+1]
         if(alpha >= 0){
           p <- length(which(dataset[,i] > quantiles[i])) / length(dataset[,i])
@@ -62,7 +62,7 @@
         cat(i, "P > 0 = ",p, "\n")
         temp_kappa <- (1-p)/p
         
-        params[(4*(i-1)+3):(4*(i-1)+4)] <- c(log(rho), log(temp_kappa))
+        params[(4*(i-1)+3):(4*(i-1)+4)] <- c((rho), (temp_kappa))
       }
       
       return(params)
@@ -114,8 +114,8 @@
     bl <- subset(bl, select=c("Date", "O3", "NO2x", "SO2x", "NO", "CO"))
     invalid_data_indices <- which(is.na(bl)) %% length(bl$O3)
     
-    bl_times <- matrix(rep(seq(1, length.out = length(bl[,1])), length(bl_values[1,])),
-                       ncol=length(bl_values[1,]))
+    bl_times <- matrix(rep(seq(1, length.out = length(bl[,1])), length(bl[1,])),
+                       ncol=length(bl[1,]))
     bl_times <- bl_times[-invalid_data_indices,]
     bl_times <- bl_times[-39413,]
     bl <- bl[-invalid_data_indices,]
