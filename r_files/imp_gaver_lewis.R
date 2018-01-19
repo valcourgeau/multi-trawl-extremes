@@ -97,7 +97,7 @@ pl_gl_full <- function(data, params, delta){
   beta <- params[2]
   rho <- params[3]
   kappa <- params[4]
-  
+  i <- 0
   for(first_index in 1:(n-1)){
     for(second_index in (first_index+1):min(n, first_index+delta)){
      #cat(data[first_index], data[second_index], "\n")
@@ -115,18 +115,39 @@ pl_gl_full <- function(data, params, delta){
       if(temp > 1e-16){
         pl <- pl + log(temp)
       }else{
-        cat(data[first_index], data[second_index], temp, "\n")
-        pl <- pl - 1000
+        i <- i + 1
+        #cat(data[first_index], data[second_index], temp, "\n")
+        pl <- pl - 10000
       }
     }
   }
-  
+  cat("Not accepted:", i/length(data), "\n")
   return(pl)
 }
 
-k <- pl_gl_full(bl_thres[,1], params_init[1:4], 2)
-fn_to_optim <- function(params){
-  -pl_gl_full(bl_thres[,1], params_init, 2)
+transform_to_alpha_beta <- function(shape, scale){
+  alpha <- 1.0/shape
+  beta <- scale/shape
+  return(c(alpha, beta))
 }
 
-DEoptim(fn = fn_to_optim, lower=c(0,0,0,0), upper=c(5,20,20,20))
+library(evir)
+lgp_sim <- rlgprocess(alpha = 3.00,
+                      beta = 1.0,
+                      kappa = 1.7,
+                      rho = 0.4,
+                      timesteps = 1000000,
+                      n=1)
+
+
+plot(density(rgpd(n = 10000, xi = 1/169, beta = (2168+27)/169)))
+lines(density(lgp_sim[lgp_sim > 0.0]))
+params_init <- c(3.00, 1.0, 0.4, 1.7) * 1.5
+k <- pl_gl_full(lgp_sim, params_init, 2)
+fn_to_optim <- function(params){
+  -pl_gl_full(lgp_sim, params, 2)
+}
+
+optim(fn = fn_to_optim, par=params_init, method="BFGS", control=list(trace=1, 
+                                                                     parscale=c(0.5,0.5,0.5,0.5),
+                                                                     reltol = 1e-6))
