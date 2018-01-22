@@ -20,7 +20,9 @@ rlgprocess <- function(alpha, beta, rho, kappa, timesteps, n){
                                 rate = latent_lambda[which_to_use])
   return(matrix(results, ncol=n))
 }
-
+setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
+source('gaver_lewis_simulation.R')
+library(evir)
 lgp_sim <- rlgprocess(alpha = 3.00,
                       beta = 1.0,
                       kappa = 1.7,
@@ -32,6 +34,10 @@ lines(lgp_sim[,2], type = 'l', col="red")
 1000000-length(which(lgp_sim == 0.0))
 summary(lgp_sim[,1])
 gpd(lgp_sim, nextremes = 10000-length(which(lgp_sim == 0.0)))
+c(1/3,  (1+1.7)/3)
 
 plot(density(lgp_sim[lgp_sim>0]))
-lines(density(rgpd(10000, xi=0.33, beta=(1+1.7)/3)))
+lines(density(evir::rgpd(10000, xi=0.33, beta=(1+1.7)/3)), col = "red")
+
+acf(lgp_sim[lgp_sim>0])
+

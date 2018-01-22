@@ -117,7 +117,7 @@ pl_gl_full <- function(data, params, delta){
       }else{
         i <- i + 1
         #cat(data[first_index], data[second_index], temp, "\n")
-        pl <- pl - 10000
+        pl <- pl - 1000
       }
     }
   }
@@ -136,18 +136,23 @@ lgp_sim <- rlgprocess(alpha = 3.00,
                       beta = 1.0,
                       kappa = 1.7,
                       rho = 0.4,
-                      timesteps = 1000000,
+                      timesteps = 10000,
                       n=1)
 
+# 
+# plot(density(rgpd(n = 10000, xi = 1/169, beta = (2168+27)/169)))
+# lines(density(lgp_sim[lgp_sim > 0.0]))
+params_init <- c(3.00, 1.0, 0.4, 1.7) * 0.7
+k <- pl_gl_full(lgp_sim, params_init, 4)
+-pl_gl_full(lgp_sim, c(3.00, 1.0, 0.4, 1.7), 4)
 
-plot(density(rgpd(n = 10000, xi = 1/169, beta = (2168+27)/169)))
-lines(density(lgp_sim[lgp_sim > 0.0]))
-params_init <- c(3.00, 1.0, 0.4, 1.7) * 1.5
-k <- pl_gl_full(lgp_sim, params_init, 2)
 fn_to_optim <- function(params){
-  -pl_gl_full(lgp_sim, params, 2)
+  -pl_gl_full(lgp_sim, params, 4) + 250*sum((params)^2)+100*sum((1/params)^2)
 }
+fn_to_optim(c(3.00, 1.0, 0.4, 1.7))
+fn_to_optim(c(1.65, 0.96, 1.00, 1.51))
 
-optim(fn = fn_to_optim, par=params_init, method="BFGS", control=list(trace=1, 
+optim(fn = fn_to_optim, par=params_init, method="L-BFGS-B", control=list(trace=2, 
                                                                      parscale=c(0.5,0.5,0.5,0.5),
-                                                                     reltol = 1e-6))
+                                                                     pgtol = 1e-6),
+      lower = rep(0.01, 4), upper = c(5, 5, 0.99, 5))
