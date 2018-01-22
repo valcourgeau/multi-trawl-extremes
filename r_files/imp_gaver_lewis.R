@@ -125,10 +125,14 @@ pl_gl_full <- function(data, params, delta){
   return(pl)
 }
 
-transform_to_alpha_beta <- function(shape, scale){
+transform_to_alpha_beta <- function(shape, scale=NA){
+  if(is.na(scale)){
+    scale <- shape[2]
+    shape <- shape[1]
+  }
   alpha <- 1.0/shape
   beta <- scale/shape
-  return(c(alpha, beta))
+  return(c("alpha"=alpha, "beta"=scale))
 }
 
 library(evir)
@@ -136,7 +140,7 @@ lgp_sim <- rlgprocess(alpha = 3.00,
                       beta = 1.0,
                       kappa = 1.7,
                       rho = 0.4,
-                      timesteps = 10000,
+                      timesteps = 100,
                       n=1)
 
 # 
@@ -146,8 +150,10 @@ params_init <- c(3.00, 1.0, 0.4, 1.7) * 0.7
 k <- pl_gl_full(lgp_sim, params_init, 4)
 -pl_gl_full(lgp_sim, c(3.00, 1.0, 0.4, 1.7), 4)
 
+transform_to_alpha_beta(evir::gpd(lgp_sim, nextremes = 10000-length(which(lgp_sim == 0.0)))$par.ests)
+
 fn_to_optim <- function(params){
-  -pl_gl_full(lgp_sim, params, 4) + 250*sum((params)^2)+100*sum((1/params)^2)
+  -pl_gl_full(lgp_sim, params, 4) + 300*sum((params)^2)+150*sum((1/params)^2)
 }
 fn_to_optim(c(3.00, 1.0, 0.4, 1.7))
 fn_to_optim(c(1.65, 0.96, 1.00, 1.51))
@@ -156,3 +162,18 @@ optim(fn = fn_to_optim, par=params_init, method="L-BFGS-B", control=list(trace=2
                                                                      parscale=c(0.5,0.5,0.5,0.5),
                                                                      pgtol = 1e-6),
       lower = rep(0.01, 4), upper = c(5, 5, 0.99, 5))
+
+### Cross-validation
+
+perform_cv <- function(data, params, kfold){
+  n <- length(data)
+  seq_stop <- seq(1, n+1, kfold)
+  lambda_array <- c(10,100,400,500,600,1000,2000)
+  for(index_without  in 1:(kfold-1)){
+    fn_to_optim <- function(params){
+      -pl_gl_full(data[-(seq_stop[index_without]):(seq_stop[index_without+1])], params, 4) + 300*sum((params)^2)+150*sum((1/params)^2)
+    }
+  }
+  
+}
+

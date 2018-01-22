@@ -16,12 +16,13 @@ rwprocess <- function(alpha, beta, rho, kappa, timesteps, n){
                                 rate = latent_lambda[which_to_use])
   return(matrix(results, ncol=n))
 }
+
 library('evir')
 wp_sim <- rwprocess(alpha = 3.00,
                       beta = 1.0,
                       kappa = 1.7,
                       rho = 0.4,
-                      timesteps = 1000,
+                      timesteps = 100000,
                       n=1)
 plot(wp_sim[,1], type = 'l')
 lines(wp_sim[,2], type = 'l', col="red")
@@ -30,4 +31,4 @@ summary(lgp_sim[,1])
 gpd(wp_sim, nextremes = 44)
 
 plot(density(wp_sim[wp_sim>0]))
-lines(density(evir::rgpd(100, xi=0.33, beta=(1+1.7)/3)))
+lines(density(evir::rgpd(1000, xi=0.33, beta=(1+1.7)/3)))

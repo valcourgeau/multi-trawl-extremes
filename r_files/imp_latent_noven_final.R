@@ -62,7 +62,7 @@
         cat(i, "P > 0 = ",p, "\n")
         temp_kappa <- (1-p)/p
         
-        params[(4*(i-1)+3):(4*(i-1)+4)] <- c((rho), (temp_kappa))
+        params[(4*(i-1)+3):(4*(i-1)+4)] <- c(log(rho), log(temp_kappa))
       }
       
       return(params)
@@ -88,7 +88,7 @@
                               trf = trf,
                               logscale = logscale)
         print(params)
-        return(-temp)
+        return(-temp+1000*sum(params^2))
       })
     }
     
@@ -191,18 +191,18 @@
                                 delta = bl_deltas[1],
                                 trf = T)
   lower_limit <- c(
-    -10,
-    -1,
+    0.001,
+    0.001,
     -5,
     -5
   )
   lower_limit
   
   upper_limit <- c(
-    -0.001,
-    4.0,
+    5.00,
+    50.0,
     0.0,
-    5.0
+    3.0
   )
   upper_limit
   o3_univ <- optim(par=params_to_work_with, 
