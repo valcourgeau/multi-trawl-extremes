@@ -1,4 +1,5 @@
-
+setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
+source('gaver_lewis_simulation.R')
 
 pw_lp1 <- function(x, alpha, beta){
   return((beta / (beta + x))^alpha)
@@ -140,19 +141,18 @@ lgp_sim <- rlgprocess(alpha = 3.00,
                       beta = 1.0,
                       kappa = 1.7,
                       rho = 0.4,
-                      timesteps = 100,
+                      timesteps = 10000,
                       n=1)
 
 # 
 # plot(density(rgpd(n = 10000, xi = 1/169, beta = (2168+27)/169)))
 # lines(density(lgp_sim[lgp_sim > 0.0]))
-params_init <- c(3.00, 1.0, 0.4, 1.7) * 0.7
+params_init <- c(3.00, 1.0, 0.4, 1.7) * 0.8
 k <- pl_gl_full(lgp_sim, params_init, 4)
 -pl_gl_full(lgp_sim, c(3.00, 1.0, 0.4, 1.7), 4)
 
-transform_to_alpha_beta(evir::gpd(lgp_sim, nextremes = 10000-length(which(lgp_sim == 0.0)))$par.ests)
-
 fn_to_optim <- function(params){
+  print(params)
   -pl_gl_full(lgp_sim, params, 4) + 300*sum((params)^2)+150*sum((1/params)^2)
 }
 fn_to_optim(c(3.00, 1.0, 0.4, 1.7))
@@ -162,6 +162,9 @@ optim(fn = fn_to_optim, par=params_init, method="L-BFGS-B", control=list(trace=2
                                                                      parscale=c(0.5,0.5,0.5,0.5),
                                                                      pgtol = 1e-6),
       lower = rep(0.01, 4), upper = c(5, 5, 0.99, 5))
+
+# 2.3751860 1.1335884 0.8419516 2.6835953
+
 
 ### Cross-validation
 

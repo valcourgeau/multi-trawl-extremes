@@ -311,7 +311,6 @@ pairwise_likelihood_single_pair(0.1, 2.0, 0.3, 5.0, 2., 3., 30, 0.3, F)
 pairwise_likelihood_single_pair(0.1, 2.0, 0.3, 1.0, -2., 3., 30, 0.3, T)
 
 pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, rho, delta, logscale=T, transformation=F){
-  cat(alpha, beta, rho, kappa, "\n")
   ok_ind <- which(!is.na(values))
   values <- values[ok_ind]
   times <- times[ok_ind]
@@ -342,7 +341,7 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
           temp <- temp + log(warnon)
         }else{
           if(warnon >= 0.0){
-            temp <- temp - 1000
+            temp <- temp - 100
           }
         }
       }
@@ -363,13 +362,13 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
 
 pl_single_all_params <- function(times, values, delta, params, logscale=T, transformation=F){
   return(pairwise_likelihood_single_full(times, values, 
-                                         alpha=1/(params[1]), 
-                                         beta=abs((params[2])/(params[1])), 
-                                         kappa=exp(params[4]), 
-                                         rho=exp(params[3]), 
-                                         delta=delta, 
-                                         logscale=T, 
-                                         transformation=transformation))
+                                         alpha = params[1], 
+                                         beta = params[2], 
+                                         kappa = exp(params[4]), 
+                                         rho = exp(params[3]), 
+                                         delta = delta, 
+                                         logscale = T, 
+                                         transformation = transformation))
 }
 
 pl_single_all_params_with_kappa <- function(times, values, delta, kappa, params, logscale=T, transformation=F){
@@ -378,6 +377,28 @@ pl_single_all_params_with_kappa <- function(times, values, delta, kappa, params,
                                          beta=abs(exp(params[2])/exp(params[1])), 
                                          kappa=exp(kappa), 
                                          rho=exp(params[3]), 
+                                         delta=delta, 
+                                         logscale=T, 
+                                         transformation=transformation))
+}
+
+pl_single_all_params_with_alpha_beta <- function(times, values, delta, alpha, beta, params, logscale=T, transformation=F){
+  return(pairwise_likelihood_single_full(times, values, 
+                                         alpha=alpha, 
+                                         beta=beta, 
+                                         kappa=exp(params[2]), 
+                                         rho=exp(params[1]), 
+                                         delta=delta, 
+                                         logscale=T, 
+                                         transformation=transformation))
+}
+
+pl_single_all_params_with_alpha_beta_kappa <- function(times, values, delta, alpha, beta, kappa, params, logscale=T, transformation=F){
+  return(pairwise_likelihood_single_full(times, values, 
+                                         alpha=alpha, 
+                                         beta=beta, 
+                                         kappa=exp(kappa), 
+                                         rho=exp(params), 
                                          delta=delta, 
                                          logscale=T, 
                                          transformation=transformation))
@@ -436,3 +457,39 @@ pl_final_univ_with_kappa <- function(times, values, delta, kappa, params, trf=T,
     return(exp(temp))
   }
 }
+
+pl_final_univ_with_alpha_beta <- function(times, values, alpha, beta, delta, params, trf=T, logscale=T){
+  temp <- pl_single_all_params_with_alpha_beta(times = times, 
+                                                     values = values,
+                                                     alpha = alpha,
+                                                     beta = beta,
+                                                     delta = delta,
+                                                     params = params,
+                                                     transformation=trf)
+  
+  if(logscale){
+    return(temp)
+  }else{
+    return(exp(temp))
+  }
+}
+
+pl_final_univ_with_alpha_beta_kappa <- function(times, values, alpha, beta, delta, kappa, params, trf=T, logscale=T){
+  temp <- pl_single_all_params_with_alpha_beta_kappa(times = times, 
+                                          values = values,
+                                          alpha = alpha,
+                                          beta = beta,
+                                          delta = delta,
+                                          kappa = kappa,
+                                          params = params,
+                                          transformation=trf)
+  
+  if(logscale){
+    return(temp)
+  }else{
+    return(exp(temp))
+  }
+}
+
+
+

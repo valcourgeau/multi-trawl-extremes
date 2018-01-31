@@ -31,38 +31,38 @@
   library(DEoptim)
   library(evir)
   library('optimr')
-  
+  library(matlib)
   
   # source files
   source('pairwise_latent_trawl.R')
+  source('differentiate.R')
   
   # Function
   {
-    create_ig_trawl <- function(dataset, quantiles, rho, kappa)
+    create_ig_trawl <- function(dataset, quantiles, rho, kappa, trf=F)
     {
       d <- length(dataset[1,]) - 1
       params <- rep(0,4*d)
       
       for(i in 1:d){
         x_to_work_on <- dataset[,i]
-        fit <- evir::gpd(x_to_work_on, method = "ml", threshold = quantiles[i])
-        #print(fit@fit$par.ests)
-        params[(4*(i-1)+1):(4*(i-1)+2)] <- (fit$par.ests)
-        #params[(4*(i-1)+2)] <- log(params[(4*(i-1)+2)])
-        alpha <- params[4*(i-1)+1]
-        if(alpha >= 0){
-          p <- length(which(dataset[,i] > quantiles[i])) / length(dataset[,i])
-          cat(i, "P > 0 = ",p, "\n")
-          temp_kappa <- (1-p)/p
-        }else{
-          temp_kappa <- kappa
-        }
+        fit <- evir::gpd(x_to_work_on, method = "ml", threshold = quantiles[i])$par.ests
+        fit[1] <- 1/fit[1]
+        fit[2] <- fit[2]*fit[1]
+        params[(4*(i-1)+1):(4*(i-1)+2)] <- fit
         
         p <- length(which(dataset[,i] > quantiles[i])) / length(dataset[,i])
-        cat(i, "P > 0 = ",p, "\n")
-        temp_kappa <- (1-p)/p
+        if(trf){
+          temp_kappa <- (1-p)/p
+        }else{
+          temp_kappa <- fit[2]*(p^{-1.0/fit[1]} - 1.0)
+          params[4*(i-1)+2] <- params[4*(i-1)+2] - temp_kappa
+        }
         
+        rho <- - line(x = 1:15, log(acf(dataset[,i], plot = F)[1:15][[1]]))$coefficients[2]
+        #rho <- -log(fit[2]^2/fit[1]*as.numeric(acf(dataset[,i], type="covariance")[1][[1]]))
         params[(4*(i-1)+3):(4*(i-1)+4)] <- c(log(rho), log(temp_kappa))
+        print(rho)
       }
       
       return(params)
@@ -79,7 +79,7 @@
               })
     }
     
-    loglik_pl_univ <- function(times, values, delta, trf, logscale=T){
+    loglik_pl_univ <- function(times, values, delta, trf, logscale=T, lambda){
       return(function(params){
         temp <- pl_final_univ(times = times,
                               values = values,
@@ -88,7 +88,75 @@
                               trf = trf,
                               logscale = logscale)
         print(params)
-        return(-temp+1000*sum(params^2))
+        print(-temp+lambda*sum(params^2)+lambda/2*sum((1/params)^2))
+        return(-temp+lambda*sum(params^2)+lambda*sum((1/params)^2))
+      })
+    }
+    
+    loglik_pl_univ_ic <- function(times, values, delta, trf, logscale=T, lambda){
+      return(function(params){
+        temp <- pl_final_univ(times = times,
+                              values = values,
+                              delta = delta,
+                              params = params,
+                              trf = trf,
+                              logscale = logscale)/10000
+        #print(params)
+        
+        # estimating the Information Criterion
+        # H hat
+        f_whole <- function(params){
+          pl_final_univ(times = times,
+                        values = values,
+                        delta = delta,
+                        params = params,
+                        trf = trf,
+                        logscale = logscale)/10000
+        }
+        
+        h_hat <- -hessian.f(f = f_whole,
+                            params = params)
+        
+        # J hat
+        j_hat <- 0.0
+        # m_n <- 8
+        # 
+        # while(m_n < n_max){
+        #   f_block <- function(params){
+        #     return(pl_final_univ(times = times[1:m_n],
+        #                   values = values[1:m_n],
+        #                   delta = delta,
+        #                   params = params,
+        #                   trf = trf,
+        #                   logscale = logscale)/10000)
+        #   }
+        #   tp <- grad.f(f = f_block, params)
+        #   j_hat <- j_hat + tp %*% t(tp)
+        #   m_n <- m_n * 2
+        # }
+        # 
+        # j_hat <- length(times) / floor(log2(length(times))) * j_hat
+        
+        n_max <- length(values)
+        #n_j_estimation <- n_max-delta+1
+        n_j_estimation <- 300
+        cat("njesti:",n_j_estimation)
+        for(start_block in 1:(n_j_estimation)){
+          f_block <- function(params){
+            return(pl_final_univ(times = times[start_block:(start_block + delta - 1)],
+                                 values = values[start_block:(start_block + delta - 1)],
+                                 delta = delta,
+                                 params = params,
+                                 trf = trf,
+                                 logscale = logscale)/10000)
+          }
+          tp <- grad.f(f = f_block, params)
+          j_hat <- j_hat + tp %*% t(tp)
+          j_hat <- delta / n_max / n_j_estimation * j_hat
+          print(params)
+          print(-temp + lambda*sum(diag(j_hat %*% matlib::inv(h_hat))))
+          return(-temp + lambda*sum(diag(j_hat %*% matlib::inv(h_hat))))
+        }
       })
     }
     
@@ -105,6 +173,55 @@
         print(-temp)
         return(-temp)
       })
+    }
+    
+    loglik_pl_univ_with_alpha_beta <- function(times, values, delta, alpha, beta, trf, logscale=T, lambda){
+      return(function(params){
+        temp <- pl_final_univ_with_alpha_beta(times = times,
+                                                    values = values,
+                                                    delta = delta,
+                                                    alpha = alpha,
+                                                    beta = beta,
+                                                    params = params,
+                                                    trf = trf,
+                                                    logscale = logscale)
+        print(params)
+        print(-temp)
+        return(-temp + lambda*sum(params^2) + lambda*sum(1/params^2))
+      })
+    }
+    
+    loglik_pl_univ_with_alpha_beta_kappa <- function(times, values, delta, alpha, beta, kappa, trf, logscale=T, lambda){
+      return(function(params){
+        temp <- pl_final_univ_with_alpha_beta_kappa(times = times,
+                                         values = values,
+                                         delta = delta,
+                                         alpha = alpha,
+                                         beta = beta,
+                                         kappa = kappa,
+                                         params = params,
+                                         trf = trf,
+                                         logscale = logscale)
+        print(params)
+        print(-temp)
+        return(-temp + lambda*sum(params^2) + lambda*sum(1/params^2))
+      })
+    }
+    
+    mom_trawl <- function(data){
+      # Hosking Wallis (1987) notation
+      data_wo_zeros <- data
+      k <- 0.5 * (mean(data)^2/var(data) - 1)
+      alpha_original <- 0.5 * mean(data) * (mean(data)^2/var(data) + 1)
+      
+      beta <- -alpha_original/k
+      alpha <- -1/k
+      
+      rho <- -log(as.numeric(acf(data, type = "covariance")[1][[1]]) * beta^2/alpha)
+
+      p <- length(which(data > 0.0)) / length(data)
+      kappa <- beta*(p^{-1.0/alpha} - 1.0)
+      return(c(alpha, beta, rho, kappa))
     }
   }
   
@@ -171,7 +288,8 @@
     params_init <- create_ig_trawl(dataset = bl_values, 
                                    rho = bl_rho, 
                                    kappa = bl_kappa,
-                                   quantiles = bl_q)
+                                   quantiles = bl_q,
+                                   trf = F)
   }
   
   fn_to_optim <- loglik_pl(times = bl_times,
@@ -184,12 +302,13 @@
   
   
   
-  # O3
+  # O3 without transfo
   params_to_work_with <- params_init[1:4]
-  fn_to_optim <- loglik_pl_univ(times = bl_times[,1],
+  fn_to_optim <- loglik_pl_univ_ic(times = bl_times[,1],
                                 values = bl_thres[,1],
                                 delta = bl_deltas[1],
-                                trf = T)
+                                lambda = 10.0,
+                                trf = F)
   lower_limit <- c(
     0.001,
     0.001,
@@ -199,19 +318,28 @@
   lower_limit
   
   upper_limit <- c(
-    5.00,
+    80.00,
     50.0,
-    0.0,
-    3.0
+    -0.01,
+    5.0
   )
   upper_limit
   o3_univ <- optim(par=params_to_work_with, 
         fn = fn_to_optim, 
-        control = list(trace=1, maxit=30), 
+        control = list(trace=1, maxit=30, pgtol=1e-6, parscale=rep(1, 4)), 
         method = "L-BFGS-B",
         lower = lower_limit,
         upper = upper_limit)
   o3_univ$par
+  
+  # with lambda = 1000, found 0.6961509  0.5449369 -1.0986186 (0.33)  1.2000247 (3.32)
+  
+  plot(density(bl_thres[,1]), xlim=c(0.5, 50))
+  lines(0:500/10, fExtremes::dgpd(0:500/10, xi = 1/0.69, beta=(0.54+3.32)*(1/0.69)))
+  lines(0:5000/100, c(1-(1+exp(params_init[4])/params_init[2])^{-(params_init[1])}, (1+exp(o3_univ$par[4])/o3_univ$par[2])^{-(o3_univ$par[1])} * evir::dgpd(1:5000/100, xi = 1/o3_univ$par[1], beta = o3_univ$par[2] + exp(o3_univ$par[4]))),
+        col = "red", lwd = 2)
+  lines(0:5000/100, (1+exp(params_init[4])/params_init[2])^{-(params_init[1])} * evir::dgpd(0:5000/100, xi = 1/params_init[1], beta = params_init[2] + exp(params_init[4])))
+  
   # o3_univ <- DEoptim(fn = fn_to_optim, 
   #                  DEoptim.control(trace=TRUE, NP=20*10),
   #                  lower = lower_limit,
@@ -220,8 +348,47 @@
   #                   fn = fn_to_optim,
   #                   method = "BFGS")
   
+  # O3 with transfo
+  params_init <- create_ig_trawl(dataset = bl_values, 
+                                 rho = bl_rho, 
+                                 kappa = bl_kappa,
+                                 quantiles = bl_q,
+                                 trf = T)
+  params_to_work_with <- params_init[1:4]
+  fn_to_optim <- loglik_pl_univ(times = bl_times[,1],
+                                values = bl_thres[,1],
+                                delta = bl_deltas[1],
+                                lambda = 1000,
+                                trf = F)
+  lower_limit <- c(
+    0.001,
+    0.001,
+    -5,
+    -5
+  )
+  lower_limit
   
-  hist(bl_thres[,1], breaks=50, probability = T)
+  upper_limit <- c(
+    80.00,
+    50.0,
+    -0.01,
+    5.0
+  )
+  upper_limit
+  o3_univ <- optim(par=params_to_work_with, 
+                   fn = fn_to_optim, 
+                   control = list(trace=1, maxit=30, pgtol=1e-6, parscale=rep(2, 4)), 
+                   method = "L-BFGS-B",
+                   lower = lower_limit,
+                   upper = upper_limit)
+  o3_univ$par
+  
+  plot(density(bl_thres[,1]), xlim=c(0, 50))
+  lines(0:5000/100, (1+exp(o3_univ$par[4])/o3_univ$par[2])^{-(o3_univ$par[1])} * evir::dgpd(0:5000/100, xi = 1/o3_univ$par[1], beta = o3_univ$par[2] + exp(o3_univ$par[4])))
+  
+  
+  
+  
   lines(0:5000/10, evir::dgpd(0:5000/10, xi = 1/params_to_work_with[1], beta = abs(exp(params_to_work_with[2])/params_to_work_with[1])) 
         / evir::dgpd(inv_g(0:500/10, xi = 1/params_to_work_with[1], sigma = abs(exp(params_to_work_with[2])/params_to_work_with[1]), kappa = params_to_work_with[4]), xi = 1, beta = 1+params_to_work_with[4]))  
   lines(0:5000/10, evir::dgpd(0:5000/10, xi = 1/o3_univ$par[1], beta = abs(exp(o3_univ$par[2])/o3_univ$par[1])) / evir::dgpd(inv_g(0:500/10, xi = 1/o3_univ$par[1], sigma = abs(exp(o3_univ$par[2])/o3_univ$par[1]), kappa = o3_univ$par[4]), xi = 1, beta = 1+o3_univ$par[4]))  
@@ -257,6 +424,62 @@
                    method = "L-BFGS-B",
                    lower = lower_limit,
                    upper = upper_limit)
+  
+  
+  # O3 with Alpha and Beta
+  
+  params_to_work_with <- params_init[3:4]
+  fn_to_optim <- loglik_pl_univ_with_alpha_beta(times = bl_times[,1],
+                                           values = bl_thres[,1],
+                                           delta = bl_deltas[1],
+                                           alpha = params_init[1],
+                                           beta = params_init[2],
+                                           lambda = 100,
+                                           trf = F)
+  lower_limit <- c(
+    -3,
+    0.001
+  )
+  lower_limit
+  
+  upper_limit <- c(
+    -0.001,
+    5.0
+  )
+  upper_limit
+  o3_univ <- optim(par=params_to_work_with, 
+                   fn = fn_to_optim, 
+                   control = list(trace=1, maxit=30), 
+                   method = "L-BFGS-B",
+                   lower = lower_limit,
+                   upper = upper_limit)
+  # -1.083037 (0.3395955)  3.114449 (22.51091)
+  
+  # O3 with Alpha, Beta, Kappa
+  
+  params_to_work_with <- params_init[3]
+  fn_to_optim <- loglik_pl_univ_with_alpha_beta_kappa(times = bl_times[,1],
+                                           values = bl_thres[,1],
+                                           delta = bl_deltas[1],
+                                           alpha = params_init[1],
+                                           beta = params_init[2],
+                                           kappa = params_init[4],
+                                           trf = F, lambda = 100)
+  lower_limit <- c(
+    -3)
+  lower_limit
+  
+  upper_limit <- c(
+  -0.001
+  )
+  upper_limit
+  o3_univ <- optim(par=params_to_work_with, 
+                   fn = fn_to_optim, 
+                   control = list(trace=1, maxit=30), 
+                   method = "L-BFGS-B",
+                   lower = lower_limit,
+                   upper = upper_limit)
+  # -1.086333 (0.3374527)
   
   # NO2x
   params_to_work_with <- params_init[5:8]
