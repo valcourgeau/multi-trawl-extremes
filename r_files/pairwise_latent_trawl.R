@@ -33,13 +33,16 @@ compute_B_inter_exp <- function(rho, t1, t2){
 }
 
 inv_g <- function(x, xi, sigma, kappa){
-  sigma <- abs(sigma)
-  # proba from GPD(alpha, beta)
-  temp <- evir::pgpd(x, xi = xi, beta = sigma)[1]
+  # sigma <- abs(sigma)
+  # # proba from GPD(alpha, beta)
+  # temp <- evir::pgpd(x, xi = xi, beta = sigma)[1]
+  # 
+  # # inverve of GPD(1, 1+kappa)
+  # temp <- evir::qgpd(temp, xi= 1, beta = (1+kappa))[1]
+  # return(temp) 
   
-  # inverve of GPD(1, 1+kappa)
-  temp <- evir::qgpd(temp, xi= 1, beta = (1+kappa))[1]
-  return(temp) 
+  res <- (1+kappa)*((1+x*xi/sigma)^{1/xi}-1)
+  return(res)
 }
 
 # Example:
