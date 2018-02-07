@@ -32,7 +32,8 @@ compute_B_inter_exp <- function(rho, t1, t2){
   }
 }
 
-inv_g <- function(x, xi, sigma, kappa){
+
+trf_inv_g <- function(z, xi, sigma, kappa){
   # sigma <- abs(sigma)
   # # proba from GPD(alpha, beta)
   # temp <- evir::pgpd(x, xi = xi, beta = sigma)[1]
@@ -41,7 +42,13 @@ inv_g <- function(x, xi, sigma, kappa){
   # temp <- evir::qgpd(temp, xi= 1, beta = (1+kappa))[1]
   # return(temp) 
   
-  res <- (1+kappa)*((1+x*xi/sigma)^{1/xi}-1)
+  res <- (1+kappa)*((1+z*xi/sigma)^{1/xi}-1)
+  return(res)
+}
+
+trf_jacobian <- function(z, xi, sigma, kappa){
+  res <- (1+kappa)/sigma
+  res <- res*(1+xi*z/sigma)^{1/xi-1}
   return(res)
 }
 
