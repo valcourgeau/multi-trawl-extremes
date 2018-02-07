@@ -21,7 +21,7 @@
   
   bl <- read.csv("bloomsbury_1994_1998.csv", sep = ",",
                  as.is = T)
-  bl <- bl[1:5000,]
+  bl <- bl[1:500,]
   
   setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
   # list of packages
@@ -100,7 +100,7 @@
                               delta = delta,
                               params = params,
                               trf = trf,
-                              logscale = logscale)/10000
+                              logscale = logscale)/1.0
         #print(params)
         
         # estimating the Information Criterion
@@ -111,7 +111,7 @@
                         delta = delta,
                         params = params,
                         trf = trf,
-                        logscale = logscale)/10000
+                        logscale = logscale)/1.0
         }
         
         h_hat <- -hessian.f(f = f_whole,
@@ -139,23 +139,27 @@
         
         n_max <- length(values)
         #n_j_estimation <- n_max-delta+1
-        n_j_estimation <- 300
-        cat("njesti:",n_j_estimation)
+        n_j_estimation <- sqrt(length(times))
+          #cat("njesti:", n_j_estimation, "\n")
         for(start_block in 1:(n_j_estimation)){
           f_block <- function(params){
-            return(pl_final_univ(times = times[start_block:(start_block + delta - 1)],
-                                 values = values[start_block:(start_block + delta - 1)],
+            return(pl_final_univ(times = times[floor((start_block-1)*n_j_estimation + 1):floor((start_block)*n_j_estimation + 1)],
+                                 values = values[floor((start_block-1)*n_j_estimation + 1):floor((start_block)*n_j_estimation + 1)],
                                  delta = delta,
                                  params = params,
                                  trf = trf,
-                                 logscale = logscale)/10000)
+                                 logscale = logscale)/1.0)
           }
           tp <- grad.f(f = f_block, params)
-          j_hat <- j_hat + tp %*% t(tp)
-          j_hat <- delta / n_max / n_j_estimation * j_hat
-          print(params)
-          print(-temp + lambda*sum(diag(j_hat %*% matlib::inv(h_hat))))
-          return(-temp + lambda*sum(diag(j_hat %*% matlib::inv(h_hat))))
+          j_hat <- j_hat + tp %o% tp
+          j_hat <- j_hat
+          
+          #cat("params:", params, "\n")
+          
+          j_hat <- lambda*sum(diag(j_hat %*% matlib::inv(h_hat)))
+          #cat("j_hat:", (j_hat), "\n")
+          #print(-temp + j_hat)
+          return(-temp + j_hat)
         }
       })
     }
@@ -303,14 +307,14 @@
   
   
   # O3 without transfo
-  params_to_work_with <- params_init[1:4]
-  fn_to_optim <- loglik_pl_univ_ic(times = bl_times[,1],
-                                values = bl_thres[,1],
-                                delta = bl_deltas[1],
-                                lambda = 10.0,
+  params_to_work_with <- params_init[5:8]
+  fn_to_optim <- loglik_pl_univ_ic(times = bl_times[,2],
+                                values = bl_thres[,2],
+                                delta = bl_deltas[2],
+                                lambda = 1.0,
                                 trf = F)
   lower_limit <- c(
-    0.001,
+    1,
     0.001,
     -5,
     -5
@@ -318,19 +322,21 @@
   lower_limit
   
   upper_limit <- c(
-    80.00,
-    50.0,
+    200,
+    10000.0,
     -0.01,
     5.0
   )
   upper_limit
   o3_univ <- optim(par=params_to_work_with, 
-        fn = fn_to_optim, 
-        control = list(trace=1, maxit=30, pgtol=1e-6, parscale=rep(1, 4)), 
-        method = "L-BFGS-B",
-        lower = lower_limit,
-        upper = upper_limit)
+                  fn = fn_to_optim, 
+                  control = list(trace=5, maxit=10, pgtol=1e-3, parscale=rep(1.0, 4)), 
+                  method = "L-BFGS-B",
+                  lower = lower_limit,
+                  upper = upper_limit)
   o3_univ$par
+  
+  
   
   # with lambda = 1000, found 0.6961509  0.5449369 -1.0986186 (0.33)  1.2000247 (3.32)
   

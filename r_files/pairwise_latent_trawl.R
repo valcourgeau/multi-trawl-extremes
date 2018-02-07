@@ -341,7 +341,7 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
           temp <- temp + log(warnon)
         }else{
           if(warnon >= 0.0){
-            temp <- temp - 100
+            temp <- temp - 1000
           }
         }
       }
@@ -352,7 +352,7 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
     }
   }
   
-  cat("Accepted: ", accepted/total, "\n")
+  #cat("Accepted: ", accepted/total, "\n")
   if(logscale){
     return(temp)
   }else{
