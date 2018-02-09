@@ -100,7 +100,7 @@ slice_area <- function(i, j, times, trawl_f_prim){
   return(temp)
 }
 
-trawl_slice_sets_not_optim <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
+trawl_slice_sets_not_optim <- function(alpha, beta, times, n, trawl_f, trawl_f_prim){
   times <- sort(times)
   A <- trawl_f(NA)$A
   slice_mat <- matrix(0, nrow = length(times), ncol = length(times))
@@ -168,9 +168,9 @@ trawl_slice_sets <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
   return(results)
 }
 
-rltrawl <- function(alpha, beta, times, trawl_f, trawl_f_prim, n, kappa = 0, transformation=T){
-  results <- trawl_slice_sets(alpha = alpha,
-                              beta = beta,
+rltrawl <- function(alpha, beta, times, trawl_f = trawl_exp, trawl_f_prim=trawl_exp_primitive, n, kappa = 0, transformation=T){
+  results <- trawl_slice_sets(alpha = 1.0,
+                              beta = 1.0+kappa,
                               times = times,
                               trawl_f = trawl_f,
                               trawl_f_prim = trawl_f_prim,
@@ -181,7 +181,7 @@ rltrawl <- function(alpha, beta, times, trawl_f, trawl_f_prim, n, kappa = 0, tra
     res_trf <- replicate(1, results)
     for(i in 1:length(times)){
       for(j in 1:n){
-        res[i, j] <- inv_g(x = res[i, j], xi = 1/alpha, sigma = abs(beta/alpha), kappa = kappa)
+        res[i, j] <- trf_inv_g(z = res[i, j], xi = 1/alpha, sigma = abs(beta/alpha), kappa = kappa)
       }
     }
   }
