@@ -62,7 +62,7 @@
         rho <- - line(x = 1:15, log(acf(dataset[,i], plot = F)[1:15][[1]]))$coefficients[2]
         #rho <- -log(fit[2]^2/fit[1]*as.numeric(acf(dataset[,i], type="covariance")[1][[1]]))
         params[(4*(i-1)+3):(4*(i-1)+4)] <- c(log(rho), log(temp_kappa))
-        print(rho)
+        #print(rho)
       }
       
       return(params)
@@ -93,7 +93,7 @@
     #   })
     # }
     
-    loglikelihood_pl_univ_ic <- function(times, values, delta, trf, model_vars_names, fixed_names, fixed_params, lambda, logscale=T, transformation=F){
+    loglikelihood_pl_univ_ic <- function(times, values, delta, model_vars_names, fixed_names, fixed_params, lambda, logscale=T, transformation=F){
       return(function(params){
         temp <- pl_univ(times = times,
                         values = values,
@@ -121,7 +121,7 @@
         
         h_hat <- -hessian.f(f = f_whole,
                             params = params)
-        print(h_hat)
+   
         # J hat
         j_hat <- 0.0
         
@@ -143,12 +143,16 @@
           }
           tp <- grad.f(f = f_block, params)
           j_hat <- j_hat + tp %o% tp
-          #j_hat <- j_hat
-          
+
           #cat("params:", params, "\n")
         }
-          j_hat <- lambda*sum(diag(j_hat %*% matlib::inv(h_hat)))
-          cat("j_hat:", (j_hat), "\n")
+          if(length(j_hat) > 1){
+            j_hat <- lambda*sum(diag(j_hat %*% matlib::inv(h_hat)))
+          }else{
+            j_hat <- lambda * j_hat / h_hat
+          }
+          
+          #cat("j_hat:", (j_hat), "\n")
           #print(-temp + j_hat)
           return(-temp + j_hat)
         
@@ -206,54 +210,6 @@
     #       #print(-temp + j_hat)
     #       return(-temp + j_hat)
     #     
-    #   })
-    # }
-    # 
-    # loglik_pl_univ_with_kappa <- function(times, values, delta, kappa, trf, logscale=T){
-    #   return(function(params){
-    #     temp <- pl_final_univ_with_kappa(times = times,
-    #                           values = values,
-    #                           delta = delta,
-    #                           kappa = kappa,
-    #                           params = params,
-    #                           trf = trf,
-    #                           logscale = logscale)
-    #     print(params)
-    #     print(-temp)
-    #     return(-temp)
-    #   })
-    # }
-    # 
-    # loglik_pl_univ_with_alpha_beta <- function(times, values, delta, alpha, beta, trf, logscale=T, lambda){
-    #   return(function(params){
-    #     temp <- pl_final_univ_with_alpha_beta(times = times,
-    #                                                 values = values,
-    #                                                 delta = delta,
-    #                                                 alpha = alpha,
-    #                                                 beta = beta,
-    #                                                 params = params,
-    #                                                 trf = trf,
-    #                                                 logscale = logscale)
-    #     print(params)
-    #     print(-temp)
-    #     return(-temp + lambda*sum(params^2) + lambda*sum(1/params^2))
-    #   })
-    # }
-    # 
-    # loglik_pl_univ_with_alpha_beta_kappa <- function(times, values, delta, alpha, beta, kappa, trf, logscale=T, lambda){
-    #   return(function(params){
-    #     temp <- pl_final_univ_with_alpha_beta_kappa(times = times,
-    #                                      values = values,
-    #                                      delta = delta,
-    #                                      alpha = alpha,
-    #                                      beta = beta,
-    #                                      kappa = kappa,
-    #                                      params = params,
-    #                                      trf = trf,
-    #                                      logscale = logscale)
-    #     print(params)
-    #     print(-temp)
-    #     return(-temp + lambda*sum(params^2) + lambda*sum(1/params^2))
     #   })
     # }
     
@@ -348,10 +304,7 @@
   #optim(par = params_init, fn = fn_to_optim)
   
   # Univariate case
-  
-  
-  
-  # O3 without transfo
+  ## O3 without transfo
   params_to_work_with <- params_init[1:4]
   fn_to_optim <- loglikelihood_pl_univ_ic(times = bl_times[,1],
                                           values = bl_thres[,1],
@@ -361,7 +314,7 @@
                                           fixed_names = c(),
                                           fixed_params = c(),
                                           logscale = T,
-                                          trf = T)
+                                          transformation = T)
   
   fn_to_optim(params_to_work_with)
   
@@ -370,12 +323,12 @@
                                           delta = bl_deltas[1],
                                           lambda = 1.0,
                                           model_vars_names = univ_model_vars_names,
-                                          fixed_names = c("alpha", "beta"),
-                                          fixed_params = params_to_work_with[1:2],
+                                          fixed_names = c("alpha", "beta", "kappa"),
+                                          fixed_params = params_to_work_with[c(1,2,4)],
                                           logscale = T,
-                                          trf = T)
+                                          transformation = T)
   
-  fn_to_optim(params_to_work_with[3:4])
+  fn_to_optim(params_to_work_with[3])
   
   # fn_to_optim <- loglik_pl_univ_ic(times = bl_times[,1],
   #                                  values = bl_thres[,1],
@@ -402,10 +355,19 @@
     5.0
   )
   upper_limit
-  o3_univ <- optim(par=params_to_work_with, 
+  o3_univ <- optim(par=params_to_work_with[3], 
                   fn = fn_to_optim, 
-                  control = list(trace=5, maxit=10, pgtol=1e-3, parscale=rep(1.0, 4)), 
+                  control = list(trace=5, maxit=10, pgtol=1e-3, parscale=rep(1.0, 1)), 
                   method = "L-BFGS-B",
-                  lower = lower_limit,
-                  upper = upper_limit)
+                  lower = -10,
+                  upper = 10)
   o3_univ$par
+  
+  te <- seq(-5,5,length.out = 200)
+  tv <- rep(0, length(te))
+  for(index in 1:length(te)){
+    tv[index] <- fn_to_optim(te[index])
+  }  
+  
+  
+  

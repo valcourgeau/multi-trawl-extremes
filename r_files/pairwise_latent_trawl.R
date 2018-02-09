@@ -255,8 +255,8 @@ pairwise_11_exp <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformat
   if(transformation){
     xi_mt <- 1/alpha
     sigma_mt <- abs(beta/alpha)
-    inv_x1 <- inv_g(x1, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
-    inv_x2 <- inv_g(x2, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
+    inv_x1 <- trf_inv_g(x1, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
+    inv_x2 <- trf_inv_g(x2, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
     new_x1 <- inv_x1
     new_x2 <- inv_x2
     jacobian1 <- trf_jacobian(z = inv_x1, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
@@ -519,10 +519,11 @@ pl_univ <- function(times, values, delta, fixed_names, fixed_params, params, mod
   opti_params_names <- model_vars_names[opti_params]
   params_all <- rep(0, length(model_vars_names))
   params_all[opti_params] <- params
+  
   if(length(fixed_params) > 0){
     params_all[!opti_params] <- fixed_params
   }
-  print(params_all)
+  
   return(pl_single_all_params(times = times,
                               values = values,
                               delta = delta,
