@@ -32,6 +32,14 @@ compute_B_inter_exp <- function(rho, t1, t2){
   }
 }
 
+# Example:
+rho <- 0.3
+t1 <- 0.1
+t2 <- 0.3
+compute_A_exp(rho)
+compute_B1_exp(rho, t1, t2) + compute_B_inter_exp(rho, t1, t2)
+compute_B3_exp(rho, t1, t2) + compute_B_inter_exp(rho, t1, t2)
+
 is_vector_elem <- function(vec_to_check, var_name){
   return(var_name %in% vec_to_check)
 }
@@ -54,6 +62,11 @@ trf_inv_g <- function(z, xi, sigma, kappa){
   return(res)
 }
 
+trf_g <- function(x, xi, sigma, kappa){
+  res <- sigma/xi*((1+x/(1+kappa))^{xi}-1)
+  return(res)
+}
+
 trf_jacobian <- function(z, xi, sigma, kappa){
   # Z should be distributed as GPD(xi, sigma) (original form)
   res <- (1+kappa)/sigma
@@ -61,14 +74,35 @@ trf_jacobian <- function(z, xi, sigma, kappa){
   return(res)
 }
 
-# Example:
-rho <- 0.3
-t1 <- 0.1
-t2 <- 0.3
-compute_A_exp(rho)
-compute_B1_exp(rho, t1, t2) + compute_B_inter_exp(rho, t1, t2)
-compute_B3_exp(rho, t1, t2) + compute_B_inter_exp(rho, t1, t2)
+# Example
+n_sample <- 1000
+alpha <- 6
+beta <- 12
+kappa <- 4
+proba_trf_k <- 1/(1+kappa)
+proba_trf_a_b <- (1+1/beta)^{-alpha}
 
+proba_no_trf <- (1+kappa/beta)^{-alpha}
+cat("Proba trf:", proba_trf)
+cat("Proba no trf:", proba_no_trf)
+library(fExtremes)
+library(evir)
+
+## no trf
+sample_a_b_k <- fExtremes::rgpd(n = n_sample, xi = 1/alpha, beta = (beta+kappa)/alpha)
+print(fExtremes::gpdFit(sample_a_b_k, type="mle", u = quantile(sample_a_b_k, proba_no_trf)))
+
+## trf_inv_g
+sample_a_b_int_k <- fExtremes::rgpd(n = n_sample, xi = 1/alpha, beta = beta/alpha) 
+print(fExtremes::gpdFit(sample_a_b_int_k, type="mle", u = quantile(sample_a_b_int_k, proba_trf_a_b)))
+trf_into_k <- trf_inv_g(sample_a_b_int_k, xi = 1/alpha, sigma = beta/alpha, kappa = kappa)
+print(fExtremes::gpdFit(trf_into_k, u = quantile(trf_int_k, proba_trf_k))) # 1.0, 5
+
+## trf_g
+sample_k_into_a_b <- fExtremes::rgpd(n = n_sample, xi = 1.0, beta = 1.0+kappa) 
+print(fExtremes::gpdFit(sample_k_into_a_b, u = quantile(sample_k_into_a_b, proba_trf_k)))
+trf_into_a_b <- trf_g(sample_k_into_a_b, xi = 1/alpha, sigma = beta/alpha, kappa = kappa)
+print(fExtremes::gpdFit(trf_into_a_b, u = quantile(trf_into_a_b, proba_trf_a_b))) # 1/6, 12/6
 
 # Case 0-0 
 

@@ -6,15 +6,20 @@ alpha <- 6
 beta <- 20
 rho <- 0.4
 kappa <- 20
-times_val <- 1:1000
+times_val <- 1:100
 trawl_val <- trawl_exp(t, rho)
 trawl_prim <- trawl_exp_primitive(t, rho)
 
-rltrawl(alpha = alpha, 
-         beta = beta, 
-         kappa = kappa,
-         times = times_val,
-         n = 1,
-         trawl_f = trawl_val,
-         trawl_f_prim = trawl_prim,
-        transformation = T)
+gen_trawl <- rltrawl(alpha = alpha, 
+                     beta = beta, 
+                     kappa = kappa,
+                     times = times_val,
+                     n = 1,
+                     trawl_f = trawl_val,
+                     trawl_f_prim = trawl_prim,
+                     transformation = T)
+plot(gen_trawl)
+length(which(gen_trawl < 0.001))
+
+plot(density(gen_trawl))
+lines(density(rgamma(shape = 1/alpha, rate = beta/alpha, n = 10000)))
