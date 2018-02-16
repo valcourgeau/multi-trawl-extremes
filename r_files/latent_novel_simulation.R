@@ -47,6 +47,27 @@ trawl_exp_primitive <- function(t, rho, zero_at=-Inf){
   })
 }
 
+collection_trawl <- function(times, params, type, prim=F){
+  if(!is.list(params)) stop('params should be a list.')
+  # TODO Add more than exp
+  if(type=="exp"){
+    if(! "rho" %in% names(params)) stop('rho should in list of parameters params.')
+    params_rho <- params$rho
+    results <- 
+    for(time_index in 1:length(times)){
+      if(prim){
+        return(lapply(times, function(t){trawl_exp_primitive(t, params_rho)}))
+      }else{
+        return(lapply(times, function(t){trawl_exp(t, params_rho)}))
+      }
+    }
+  }
+  stop('Fatal error: no trawl functions list created')
+}
+
+funlist <- collection_trawl(times = 1:5, list("rho"=0.4), type="exp")
+funlist[[2]](NA)
+
 trawl_deterministic <- function(trawl_f, alpha, beta, dt, n = n){
   trawl_info <- trawl_f(NA)
  
@@ -100,21 +121,29 @@ slice_area <- function(i, j, times, trawl_f_prim){
   return(temp)
 }
 
-trawl_slice_sets_not_optim <- function(alpha, beta, times, n, trawl_f, trawl_f_prim){
+trawl_slice_sets_not_optim <- function(alpha, beta, times, n, trawl_fs, trawl_fs_prim){
+  # TODO sort the trawl_fs and trawl_fs_prim as the times
+  # TODO current_trawl and going further back? instead of 8
+  
+  if(!is.list(trawl_fs)) stop('Wrong type: trawl set should be a list.')
+  
   times <- sort(times)
-  A <- trawl_f(NA)$A
+  A <- trawl_fs[[1]](NA)$A
   slice_mat <- matrix(0, nrow = length(times), ncol = length(times))
   gamma_sim <- matrix(0, length(times) * length(times), ncol= n)
-  for(i in 1:length(times)){
-    for(j in i:length(times)){
-      slice_mat[i, j] <- slice_area(i, j, times, trawl_f_prim)
-      gamma_sim[(i-1) * length(times) + j,] <- rgamma(shape = alpha * slice_mat[i,j] / A,
-                                                      rate = beta,
-                                                      n = n)
+  
+  # Creating the matrix of gamma realisations
+  for(main_index in 1:length(times)){
+    for(second_index in main_index:length(times)){
+      slice_mat[main_index, second_index] <- slice_area(main_index, second_index, times, trawl_fs_prim[[main_index]])
+      gamma_sim[(main_index-1) * length(times) + second_index,] <- rgamma(shape = alpha * slice_mat[main_index, second_index] / A,
+                                                                          rate = beta,
+                                                                          n = n)
     }
   }
-  
-  n_trawl_forward <- trawl_f(NA)$time_eta
+    
+  # Going back in time to use the dep structure
+  n_trawl_forward <- trawl_fs[[1]](NA)$time_eta
   results <- matrix(0, nrow = length(times), ncol = n)
   for(current_trawl in 1:length(times)){
     for(back_trawl in max(1, current_trawl-8+1):current_trawl){
@@ -126,8 +155,9 @@ trawl_slice_sets_not_optim <- function(alpha, beta, times, n, trawl_f, trawl_f_p
     }
   }
   
-  for(i in 1:(length(times))){
-    results[i,] <- results[i,] + gamma_sim[(i-1) * length(times) + i,]
+  # Using independent scattering of Levy basis to add time dependence to trawls
+  for(main_index in 1:(length(times))){
+    results[main_index,] <- results[main_index,] + gamma_sim[(main_index-1) * length(times) + i,]
   }
   
   #results[length(times),] <- results[length(times), ] + gamma_sim[(length(times)-1) * length(times) + length(times),]
@@ -164,20 +194,27 @@ trawl_slice_sets <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
   return(results)
 }
 
-rltrawl <- function(alpha, beta, times, trawl_f = trawl_exp, trawl_f_prim=trawl_exp_primitive, n, kappa = 0, transformation=T){
+rltrawl <- function(alpha, beta, times, trawl_fs, trawl_fs_prim, n, kappa = 0, transformation=T){
+  if(length(trawl_fs) != length(times)){
+    stop('Wrong number of trawl functions compared to timestamps.')
+  }
+  if(length(trawl_fs_prim) != length(times)){
+    stop('Wrong number of trawl primitives compared to timestamps.')
+  }
+  
   if(!transformation){
     results <- trawl_slice_sets_not_optim(alpha = alpha,
                                           beta = beta+kappa,
                                           times = times,
-                                          trawl_f = trawl_f,
-                                          trawl_f_prim = trawl_f_prim,
+                                          trawl_fs = trawl_fs,
+                                          trawl_fs_prim = trawl_fs_prim,
                                           n = n)
   }else{
     results <- trawl_slice_sets_not_optim(alpha = 1.0,
                                           beta = 1.0+kappa,
                                           times = times,
-                                          trawl_f = trawl_f,
-                                          trawl_f_prim = trawl_f_prim,
+                                          trawl_fs = trawl_fs,
+                                          trawl_fs_prim = trawl_fs_prim,
                                           n = n)
   }
   # 
@@ -193,14 +230,14 @@ rltrawl <- function(alpha, beta, times, trawl_f = trawl_exp, trawl_f_prim=trawl_
   return(results)
 }
 
-rlexceed <- function(alpha, beta, kappa, times, trawl_f, trawl_f_prim, n, transformation){
+rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, transformation){
   # Generate Gamma
   gen_trawl <- rltrawl(alpha = alpha,
                        beta = beta,
                        kappa = kappa,
                        times = times,
-                       trawl_f = trawl_f,
-                       trawl_f_prim = trawl_f_prim,
+                       trawl_fs = trawl_fs,
+                       trawl_fs_prim = trawl_fs_prim,
                        n = n,
                        transformation = transformation)
 
@@ -214,8 +251,8 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_f, trawl_f_prim, n, transf
   
   #print(gen_trawl)
   prob_zero <- 1-exp(-kappa * gen_trawl)
-  which_zero <- which(prob_zero < unif_samples)
-  print(which_zero)
+  which_zero <- which(prob_zero >= unif_samples)
+
   #plot(rexp(n = 1, rate = trawl_not_optim[!which_zero]))
   if(transformation){
     gen_exceedances[-which_zero] <-  vapply(rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero]),
@@ -224,13 +261,14 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_f, trawl_f_prim, n, transf
   }else{
     gen_exceedances[-which_zero] <-  rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero])
   }
+  
   return(gen_exceedances)
 }
 
 
 # Example
 n_sims <- 50
-times <- 1:1000
+times <- 1:100
 kappa <- 1.7
 alpha <- 3
 beta <- 1
@@ -238,19 +276,23 @@ rho <- 0.4
 
 
 ## Trawl process simulation
-trawl_1 <- trawl_exp(t, rho)
-trawl_1_prim <- trawl_exp_primitive(t, rho)
+
+### Generating the functions
+trawl_1 <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = F)
+trawl_1_prim <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = T)
+
+trl_slice <- trawl_slice_sets_not_optim(alpha = alpha, beta = beta, times = times, trawl_fs = trawl_1, trawl_fs_prim = trawl_1_prim, n = 1)
 
 ### no transformation
 gen_trawl <- rltrawl(alpha = alpha,
                       beta = beta,
                       times = times,
                       n = 1,
-                      trawl_f = trawl_1,
-                      trawl_f_prim = trawl_1_prim,
+                      trawl_fs = trawl_1,
+                      trawl_fs_prim = trawl_1_prim,
                       kappa = 2,
                       transformation = F)
-acf(gen_trawl, type = "covariance")[0]
+acf(gen_trawl, type = "covariance")
 (alpha)/(beta+kappa)^2
 
 ### no transformation
@@ -261,8 +303,8 @@ for(i in 1:n_sims){
   gen_exc <- rlexceed(alpha = alpha,
                       beta = beta,
                       kappa = kappa,
-                      trawl_f = trawl_exp(length(times), rho),
-                      trawl_f_prim = trawl_exp_primitive(length(times), rho),
+                      trawl_fs = trawl_1,
+                      trawl_fs_prim = trawl_1_prim,
                       times = times,
                       n = 1,
                       transformation = F)
@@ -283,14 +325,41 @@ abline(h=(beta+kappa)/alpha, col = "red")
 mean(par_ests_sims_no_trf[,2])
 sd(par_ests_sims_no_trf[,2])
 
-gen_exc_trf <- rlexceed(alpha = alpha,
-                    beta = beta,
-                    kappa = kappa,
-                    trawl_f = trawl_exp(length(times), rho),
-                    trawl_f_prim = trawl_exp_primitive(length(times), rho),
-                    times = times,
-                    n = 1,
-                    transformation = T)
+### transformation
+par_ests_sims_trf <- matrix(0, ncol = 2, nrow = n_sims)
+for(i in 1:n_sims){
+  gen_exc_trf <- rlexceed(alpha = alpha,
+                          beta = beta,
+                          kappa = kappa,
+                          trawl_fs = trawl_1,
+                          trawl_fs_prim = trawl_1_prim,
+                          times = times,
+                          n = 1,
+                          transformation = T)
+  par_ests_sims_trf[i,] <- fExtremes::gpdFit(gen_exc_trf, u=1e-6)@fit$par.ests
+}
+
+#### xi
+1
+boxplot(par_ests_sims_trf[,1])
+abline(h=1/alpha, col = "red")
+mean(par_ests_sims_trf[,1])
+sd(par_ests_sims_trf[,1])
+
+#### sigma
+(beta+kappa)/alpha
+(beta)/alpha
+boxplot(par_ests_sims_trf[,2])
+abline(h=(beta)/alpha, col = "red")
+mean(par_ests_sims_trf[,2])
+sd(par_ests_sims_trf[,2])
+
+test_gamma <- rgamma(n = 100000, shape = 1.0, scale = 1.2)
+test_gamma_trf <- vapply(test_gamma,
+       FUN.VALUE = 1.0,
+       FUN = function(x){return(trf_g(x, xi = 3.5, sigma = 1.2, kappa = 0.2))})
+fExtremes::gpdFit(test_gamma_trf, u=1e-6)
+
 proba_exc <- (1+kappa/beta)^{-alpha}
 hist(gen_exc_trf[gen_exc_trf>0.0&gen_exc_trf<50], breaks=50, probability = T, xlim = c(0, 50))
 test_data_trf <- evir::rgpd(n = 1000, xi = 1/alpha, beta =(beta)/alpha)

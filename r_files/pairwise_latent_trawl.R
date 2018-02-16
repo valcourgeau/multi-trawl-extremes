@@ -63,6 +63,7 @@ trf_inv_g <- function(z, xi, sigma, kappa){
 }
 
 trf_g <- function(x, xi, sigma, kappa){
+  # From GPD(1,1+kappa) to GPD(xi, sigma)
   res <- sigma/xi*((1+x/(1+kappa))^{xi}-1)
   return(res)
 }
