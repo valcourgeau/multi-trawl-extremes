@@ -49,30 +49,11 @@ test_vec <- c("elem")
 is_vector_elem(test_vec, "elem") # Returns True
 is_vector_elem(test_vec, "ele") # Returns False
 
-# trf_inv_g <- function(z, xi, sigma, kappa){
-#   # sigma <- abs(sigma)
-#   # # proba from GPD(alpha, beta)
-#   # temp <- evir::pgpd(x, xi = xi, beta = sigma)[1]
-#   # 
-#   # # inverve of GPD(1, 1+kappa)
-#   # temp <- evir::qgpd(temp, xi= 1, beta = (1+kappa))[1]
-#   # return(temp) 
-#   
-#   res <- (1+kappa)*((1+z*xi/sigma)^{1/xi}-1)
-#   return(res)
-# }
-
 trf_inv_g <- function(z, alpha, beta, kappa, offset=10){
   # From GPD(alpha, beta) to GPD(offset, offset+kappa)
   res <- (offset+kappa)*((1+z/beta)^{alpha/offset}-1)
   return(res)
 }
-
-# trf_g <- function(x, xi, sigma, kappa){
-#   # From GPD(1,1+kappa) to GPD(xi, sigma)
-#   res <- sigma/xi*((1+x/(1+kappa))^{xi}-1)
-#   return(res)
-# }
 
 trf_g <- function(x, alpha, beta, kappa, offset=10){
   # From GPD(offset, offset+kappa) to GPD(xi, sigma)
@@ -148,21 +129,7 @@ cat("Proba no trf:", proba_no_trf)
 library(fExtremes)
 library(evir)
 
-## no trf
-sample_a_b_k <- fExtremes::rgpd(n = n_sample, xi = 1/alpha, beta = (beta+kappa)/alpha)
-print(fExtremes::gpdFit(sample_a_b_k, type="mle", u = quantile(sample_a_b_k, proba_no_trf)))
-
-## trf_inv_g
-sample_a_b_int_k <- fExtremes::rgpd(n = n_sample, xi = 1/alpha, beta = beta/alpha) 
-print(fExtremes::gpdFit(sample_a_b_int_k, type="mle", u = quantile(sample_a_b_int_k, proba_trf_a_b)))
-trf_into_k <- trf_inv_g(sample_a_b_int_k, xi = 1/alpha, sigma = beta/alpha, kappa = kappa)
-print(fExtremes::gpdFit(trf_into_k, u = quantile(trf_int_k, proba_trf_k))) # 1.0, 5
-
-## trf_g
-sample_k_into_a_b <- fExtremes::rgpd(n = n_sample, xi = 1.0, beta = 1.0+kappa) 
-print(fExtremes::gpdFit(sample_k_into_a_b, u = quantile(sample_k_into_a_b, proba_trf_k)))
-trf_into_a_b <- trf_g(sample_k_into_a_b, alpha = alpha, sigma = beta/alpha, kappa = kappa)
-print(fExtremes::gpdFit(trf_into_a_b, u = quantile(trf_into_a_b, proba_trf_a_b))) # 1/6, 12/6
+# TODO rewrite example
 
 # Case 0-0 
 
@@ -241,10 +208,8 @@ pairwise_10_2 <- function(t1, x1, t2, alpha, beta, kappa, rho, trawlA, B1, B2, B
 pairwise_10_exp <- function(t1, x1, t2, alpha, beta, kappa, rho, transformation=F){
   # Marginal Transformation
   if(transformation){
-    xi_mt <- 1/alpha
-    sigma_mt <- abs(beta/alpha)
     inv_x <- trf_inv_g(x1, alpha = alpha, beta = beta, kappa = kappa)
-    jacobian <- trf_jacobian(z = inv_x, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
+    jacobian <- trf_jacobian(z = x1, alpha = alpha, beta = beta, kappa = kappa)
     new_x <- inv_x
   }else{
     new_x <- x1
@@ -347,14 +312,12 @@ pairwise_11_2 <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, B1, B2, B3){
 pairwise_11_exp <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation=F, epsilon=1e-8){
   # Marginal Transformation
   if(transformation){
-    xi_mt <- 1/alpha
-    sigma_mt <- abs(beta/alpha)
-    inv_x1 <- trf_inv_g(x1, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
-    inv_x2 <- trf_inv_g(x2, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
+    inv_x1 <- trf_inv_g(x1, alpha = alpha, beta = beta, kappa = kappa)
+    inv_x2 <- trf_inv_g(x2, alpha = alpha, beta = beta, kappa = kappa)
     new_x1 <- inv_x1
     new_x2 <- inv_x2
-    jacobian1 <- trf_jacobian(z = inv_x1, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
-    jacobian2 <- trf_jacobian(z = inv_x2, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
+    jacobian1 <- trf_jacobian(z = x1, alpha = alpha, beta = beta, kappa = kappa)
+    jacobian2 <- trf_jacobian(z = x2, alpha = alpha, beta = beta, kappa = kappa)
     temp <- jacobian1 * jacobian2
     #temp <- 1.0
     #temp <- 1/temp
