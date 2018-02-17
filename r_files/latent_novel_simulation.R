@@ -194,13 +194,18 @@ trawl_slice_sets <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
   return(results)
 }
 
-rltrawl <- function(alpha, beta, times, trawl_fs, trawl_fs_prim, n, kappa = 0, transformation=T){
+
+rltrawl <- function(alpha, beta, times, trawl_fs, trawl_fs_prim, n, kappa = 0, transformation=T, offset_shape=NULL, offset_scale=NULL){
   if(length(trawl_fs) != length(times)){
     stop('Wrong number of trawl functions compared to timestamps.')
   }
   if(length(trawl_fs_prim) != length(times)){
     stop('Wrong number of trawl primitives compared to timestamps.')
   }
+  if(transformation & (is.null(offset_scale) | is.null(offset_shape))){
+    stop('When using marginal trf, indicate shape and scale offsets.')
+  }
+  
   
   if(!transformation){
     results <- trawl_slice_sets_not_optim(alpha = alpha,
@@ -210,27 +215,23 @@ rltrawl <- function(alpha, beta, times, trawl_fs, trawl_fs_prim, n, kappa = 0, t
                                           trawl_fs_prim = trawl_fs_prim,
                                           n = n)
   }else{
-    results <- trawl_slice_sets_not_optim(alpha = 1.0,
-                                          beta = 1.0+kappa,
+    results <- trawl_slice_sets_not_optim(alpha = offset_shape,
+                                          beta = offset_scale+kappa,
                                           times = times,
                                           trawl_fs = trawl_fs,
                                           trawl_fs_prim = trawl_fs_prim,
                                           n = n)
   }
-  # 
-  # special_g <- function(x){
-  #   return(trf_g(x, xi = 1/alpha, sigma = abs(beta/alpha), kappa = kappa))
-  # }
-  # 
-  # if(!transformation){
-  #   return(results)
-  # }else{
-  #   return(vapply(X = results, FUN = special_g, FUN.VALUE=1))
-  # }
+  
   return(results)
 }
 
-rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, transformation){
+rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, transformation, n_moments = 4){
+  offset_shape <- n_moments+1
+  offset_scale <- trf_find_offset_scale(alpha = alpha,
+                                       beta = beta,
+                                       kappa = kappa,
+                                       offset_shape = n_moments+1)
   # Generate Gamma
   gen_trawl <- rltrawl(alpha = alpha,
                        beta = beta,
@@ -239,9 +240,11 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
                        trawl_fs = trawl_fs,
                        trawl_fs_prim = trawl_fs_prim,
                        n = n,
-                       transformation = transformation)
+                       transformation = transformation,
+                       offset_shape = offset_shape,
+                       offset_scale = offset_scale)
 
-  
+  # Uniform threshold
   unif_samples <- runif(n=length(times)*n)
   if(n == 1){
     gen_exceedances <- rep(0, length(times))
@@ -257,7 +260,10 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
   if(transformation){
     gen_exceedances[-which_zero] <-  vapply(rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero]),
                                           FUN.VALUE = 1.0,
-                                          FUN = function(x){return(trf_g(x, alpha = alpha, beta = beta, kappa = kappa))})
+                                          FUN = function(x){return(trf_g(x, alpha = alpha, 
+                                                                         beta = beta, kappa = kappa, 
+                                                                         offset_scale = offset_scale,
+                                                                         offset_shape = offset_shape))})
   }else{
     gen_exceedances[-which_zero] <-  rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero])
   }
@@ -269,13 +275,23 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
 # Example
 n_sims <- 50
 times <- 1:100
-kappa <- 1.7
+kappa <- 0.3
 alpha <- 3
 beta <- 1
 rho <- 0.4
+n_moments <- 4
 
+## Find offset scale
+offset_shape <- n_moments + 1
+kappa / ((1+kappa/beta)^{alpha/offset_shape} - 1)
+trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
+offset_scale  <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
+
+cat("Prob non zero for non-trf",(1+kappa/beta)^{-alpha}, "\n")
+cat("Prob non zero for trf",(1+kappa/offset_scale)^(-offset_shape), "\n")
 
 ## Trawl process simulation
+library(gPdtest)
 
 ### Generating the functions
 trawl_1 <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = F)
@@ -308,7 +324,7 @@ for(i in 1:n_sims){
                       times = times,
                       n = 1,
                       transformation = F)
-  par_ests_sims_no_trf[i,] <- fExtremes::gpdFit(gen_exc, u=1e-6)@fit$par.ests
+  par_ests_sims_no_trf[i,] <- fExtremes::gpdFit(gen_exc, u =1e-6)@fit$par.ests
 }
 
 #### xi
@@ -324,9 +340,10 @@ boxplot(par_ests_sims_no_trf[,2])
 abline(h=(beta+kappa)/alpha, col = "red")
 mean(par_ests_sims_no_trf[,2])
 sd(par_ests_sims_no_trf[,2])
+# OBS: depending on fitting procedure used: over or under estimation happening gPdtest::gpd.fit and fExtremes::gpdFit
 
 #### ACF
-acf(gen_trawl)
+acf(gen_trawl, main = paste("ACF trawl with rho =", rho))
 lines(0:20, exp(-rho*0:20), col = "red")
 
 ### transformation
@@ -340,11 +357,12 @@ for(i in 1:n_sims){
                           times = times,
                           n = 1,
                           transformation = T)
-  par_ests_sims_trf[i,] <- fExtremes::gpdFit(gen_exc_trf, u=1e-6)@fit$par.ests
+  par_ests_sims_trf[i,] <- fExtremes::gpdFit(gen_exc_trf, u =1e-6)@fit$par.ests
 }
 
 #### xi
-1
+10
+1/alpha
 boxplot(par_ests_sims_trf[,1])
 abline(h=1/alpha, col = "red")
 mean(par_ests_sims_trf[,1])
@@ -357,15 +375,3 @@ boxplot(par_ests_sims_trf[,2])
 abline(h=(beta)/alpha, col = "red")
 mean(par_ests_sims_trf[,2])
 sd(par_ests_sims_trf[,2])
-
-test_gamma <- rgamma(n = 100000, shape = 1.0, scale = 1/1.2)
-test_gamma_trf <- vapply(test_gamma,
-       FUN.VALUE = 1.0,
-       FUN = function(x){return(trf_g(x, alpha = 3.5, beta = 1.2, kappa = 0.2))})
-fExtremes::gpdFit(test_gamma_trf, u=1e-6)
-
-proba_exc <- (1+kappa/beta)^{-alpha}
-hist(gen_exc_trf[gen_exc_trf>0.0&gen_exc_trf<50], breaks=50, probability = T, xlim = c(0, 50))
-test_data_trf <- evir::rgpd(n = 1000, xi = 1/alpha, beta =(beta)/alpha)
-hist(test_data[test_data >0 & test_data < 50], breaks=50, probability = T, xlim = c(0, 50))
-fExtremes::gpdFit(gen_exc_trf, type = "mle", u = quantile(gen_exc_trf, proba_exc))
