@@ -257,7 +257,7 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
   if(transformation){
     gen_exceedances[-which_zero] <-  vapply(rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero]),
                                           FUN.VALUE = 1.0,
-                                          FUN = function(x){return(trf_g(x, xi = 1/alpha, sigma = beta/alpha, kappa = kappa))})
+                                          FUN = function(x){return(trf_g(x, alpha = alpha, beta = beta, kappa = kappa))})
   }else{
     gen_exceedances[-which_zero] <-  rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero])
   }
@@ -325,6 +325,10 @@ abline(h=(beta+kappa)/alpha, col = "red")
 mean(par_ests_sims_no_trf[,2])
 sd(par_ests_sims_no_trf[,2])
 
+#### ACF
+acf(gen_trawl)
+lines(0:20, exp(-rho*0:20), col = "red")
+
 ### transformation
 par_ests_sims_trf <- matrix(0, ncol = 2, nrow = n_sims)
 for(i in 1:n_sims){
@@ -354,10 +358,10 @@ abline(h=(beta)/alpha, col = "red")
 mean(par_ests_sims_trf[,2])
 sd(par_ests_sims_trf[,2])
 
-test_gamma <- rgamma(n = 100000, shape = 1.0, scale = 1.2)
+test_gamma <- rgamma(n = 100000, shape = 1.0, scale = 1/1.2)
 test_gamma_trf <- vapply(test_gamma,
        FUN.VALUE = 1.0,
-       FUN = function(x){return(trf_g(x, xi = 3.5, sigma = 1.2, kappa = 0.2))})
+       FUN = function(x){return(trf_g(x, alpha = 3.5, beta = 1.2, kappa = 0.2))})
 fExtremes::gpdFit(test_gamma_trf, u=1e-6)
 
 proba_exc <- (1+kappa/beta)^{-alpha}

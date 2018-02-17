@@ -49,29 +49,76 @@ test_vec <- c("elem")
 is_vector_elem(test_vec, "elem") # Returns True
 is_vector_elem(test_vec, "ele") # Returns False
 
-trf_inv_g <- function(z, xi, sigma, kappa){
-  # sigma <- abs(sigma)
-  # # proba from GPD(alpha, beta)
-  # temp <- evir::pgpd(x, xi = xi, beta = sigma)[1]
-  # 
-  # # inverve of GPD(1, 1+kappa)
-  # temp <- evir::qgpd(temp, xi= 1, beta = (1+kappa))[1]
-  # return(temp) 
-  
-  res <- (1+kappa)*((1+z*xi/sigma)^{1/xi}-1)
+# trf_inv_g <- function(z, xi, sigma, kappa){
+#   # sigma <- abs(sigma)
+#   # # proba from GPD(alpha, beta)
+#   # temp <- evir::pgpd(x, xi = xi, beta = sigma)[1]
+#   # 
+#   # # inverve of GPD(1, 1+kappa)
+#   # temp <- evir::qgpd(temp, xi= 1, beta = (1+kappa))[1]
+#   # return(temp) 
+#   
+#   res <- (1+kappa)*((1+z*xi/sigma)^{1/xi}-1)
+#   return(res)
+# }
+
+trf_inv_g <- function(z, alpha, beta, kappa, offset=10){
+  # From GPD(alpha, beta) to GPD(offset, offset+kappa)
+  res <- (offset+kappa)*((1+z/beta)^{alpha/offset}-1)
   return(res)
 }
 
-trf_g <- function(x, xi, sigma, kappa){
-  # From GPD(1,1+kappa) to GPD(xi, sigma)
-  res <- sigma/xi*((1+x/(1+kappa))^{xi}-1)
+# trf_g <- function(x, xi, sigma, kappa){
+#   # From GPD(1,1+kappa) to GPD(xi, sigma)
+#   res <- sigma/xi*((1+x/(1+kappa))^{xi}-1)
+#   return(res)
+# }
+
+trf_g <- function(x, alpha, beta, kappa, offset=10){
+  # From GPD(offset, offset+kappa) to GPD(xi, sigma)
+  res <- beta*((1+x/(offset+kappa))^{offset/alpha}-1)
   return(res)
 }
+
+# Example
+kappa <- 1.7
+alpha <- 3
+beta <- 1.0
+rho <- 0.4
+
+## Verification trf_inv_g and trf_g are inverse functions of eachother
+plot(1:10, trf_inv_g(trf_g(x = 1:10, alpha = alpha, beta = beta, kappa = kappa), alpha = alpha, beta = beta, kappa = kappa))
+plot(1:10, trf_g(trf_inv_g(z = 1:10, alpha = alpha, beta = beta, kappa = kappa), alpha = alpha, beta = beta, kappa = kappa))
+
+## Verification of output densities
+n_samples <- 2^10
+gpd_data_offset <- gPdtest::rgp(n = n_samples, shape = 1/10, scale = ((10+kappa)/10))
+gpd_data_ab <- gPdtest::rgp(n_samples, shape = 1/alpha, scale=beta/alpha)
+
+### from GPD(offset, offset+kappa) to GPD(alpha, beta)
+hist(trf_g(x = gpd_data_offset, alpha = alpha, beta = beta, kappa = kappa), freq = F, breaks=80)
+
+plot(density(trf_g(x = gpd_data_offset, alpha = alpha, beta = beta, kappa = kappa)))
+lines(density(gpd_data_ab), type="l", col="red")
+lines(seq(0,5,length.out = 100), alpha/beta*(1+seq(0,5,length.out = 100)/beta)^{-alpha-1}, lty = 2, col="green")
+
+#### testing the marginal fits
+gPdtest::gpd.fit(gpd_data_ab, method = "amle")
+gPdtest::gpd.fit(trf_g(x = gpd_data_offset, alpha = alpha, beta = beta, kappa = kappa), method ="amle")
+
+### from GPD(alpha, beta) to GPD(offset, offset+kappa)
+plot(density(gpd_data_offset), col="red", probability = T)
+lines(density(trf_inv_g(z = gpd_data_ab, alpha = alpha, beta = beta, kappa = kappa)))
+lines(seq(0,5,length.out = 100), 10/(10+kappa)*(1+seq(0,5,length.out = 100)/(10+kappa))^{-10-1}, lty = 2, col="green", lwd=2)
+
+#### testing the marginal fits
+gPdtest::gpd.fit(gpd_data_offset, method = "amle")
+gPdtest::gpd.fit(trf_inv_g(z = gpd_data_ab, alpha = alpha, beta = beta, kappa = kappa), method ="amle")
 
 trf_jacobian <- function(z, xi, sigma, kappa){
   # Z should be distributed as GPD(xi, sigma) (original form)
   res <- (1+kappa)/sigma
-  res <- res*(1+xi*z/sigma)^{1/xi-1}
+  res <- res*(1+xi*z/sigma)^{-1}
   return(res)
 }
 
@@ -102,7 +149,7 @@ print(fExtremes::gpdFit(trf_into_k, u = quantile(trf_int_k, proba_trf_k))) # 1.0
 ## trf_g
 sample_k_into_a_b <- fExtremes::rgpd(n = n_sample, xi = 1.0, beta = 1.0+kappa) 
 print(fExtremes::gpdFit(sample_k_into_a_b, u = quantile(sample_k_into_a_b, proba_trf_k)))
-trf_into_a_b <- trf_g(sample_k_into_a_b, xi = 1/alpha, sigma = beta/alpha, kappa = kappa)
+trf_into_a_b <- trf_g(sample_k_into_a_b, alpha = alpha, sigma = beta/alpha, kappa = kappa)
 print(fExtremes::gpdFit(trf_into_a_b, u = quantile(trf_into_a_b, proba_trf_a_b))) # 1/6, 12/6
 
 # Case 0-0 
@@ -184,7 +231,7 @@ pairwise_10_exp <- function(t1, x1, t2, alpha, beta, kappa, rho, transformation=
   if(transformation){
     xi_mt <- 1/alpha
     sigma_mt <- abs(beta/alpha)
-    inv_x <- trf_inv_g(x1, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
+    inv_x <- trf_inv_g(x1, alpha = alpha, beta = beta, kappa = kappa)
     jacobian <- trf_jacobian(z = inv_x, xi = xi_mt, sigma = sigma_mt, kappa = kappa)
     new_x <- inv_x
   }else{
