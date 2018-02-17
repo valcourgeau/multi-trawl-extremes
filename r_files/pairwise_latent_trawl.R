@@ -115,10 +115,22 @@ lines(seq(0,5,length.out = 100), 10/(10+kappa)*(1+seq(0,5,length.out = 100)/(10+
 gPdtest::gpd.fit(gpd_data_offset, method = "amle")
 gPdtest::gpd.fit(trf_inv_g(z = gpd_data_ab, alpha = alpha, beta = beta, kappa = kappa), method ="amle")
 
-trf_jacobian <- function(z, xi, sigma, kappa){
-  # Z should be distributed as GPD(xi, sigma) (original form)
-  res <- (1+kappa)/sigma
-  res <- res*(1+xi*z/sigma)^{-1}
+dlgpd <- function(x, alpha, beta){
+  return(alpha/beta*(1+x/beta)^{-alpha-1.0})
+}
+
+plgpd <- function(x, alpha, beta, lower.tail=F){
+  res <- 1-(1+x/beta)^{-alpha}
+  if(lower.tail){
+    res <- 1-res
+  }
+  return(res)
+}
+
+trf_jacobian <- function(z, alpha, beta, kappa, offset = 10){
+  # TODO check whether it is numerically stable by division of pdfs
+  inv_g_z <- trf_inv_g(z = z, alpha = alpha, beta = beta, kappa = kappa)
+  res <- dlgamma(x = z, alpha = alpha, beta = beta) / dlgamma(x = inv_g_z, alpha = offset, beta = offset+kappa)
   return(res)
 }
 
@@ -131,7 +143,7 @@ proba_trf_k <- 1/(1+kappa)
 proba_trf_a_b <- (1+1/beta)^{-alpha}
 
 proba_no_trf <- (1+kappa/beta)^{-alpha}
-cat("Proba trf:", proba_trf)
+cat("Proba trf:", proba_trf_k)
 cat("Proba no trf:", proba_no_trf)
 library(fExtremes)
 library(evir)
