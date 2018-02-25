@@ -121,7 +121,7 @@ plgpd <- function(x, alpha, beta, lower.tail=F){
 trf_jacobian <- function(z, alpha, beta, kappa, offset_scale, offset_shape){
   # TODO check whether it is numerically stable by division of pdfs
   inv_g_z <- trf_inv_g(z = z, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
-  res <- dlgamma(x = z, alpha = alpha, beta = beta) / dlgamma(x = inv_g_z, alpha = offset_shape, beta = offset_scale + kappa)
+  res <- dlgpd(x = z, alpha = alpha, beta = beta) / dlgpd(x = inv_g_z, alpha = offset_shape, beta = offset_scale + kappa)
   return(res)
 }
 
@@ -221,7 +221,7 @@ pairwise_10_exp <- function(t1, x1, t2, alpha, beta, kappa, rho, transformation=
     offset_shape <- n_moments + 1
     offset_scale <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
     inv_x <- trf_inv_g(x1, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
-    jacobian <- trf_jacobian(z = x1, alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
+    jacobian <- trf_jacobian(z = x1, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
     new_x <- inv_x
   }else{
     new_x <- x1
@@ -330,8 +330,8 @@ pairwise_11_exp <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformat
     inv_x2 <- trf_inv_g(x2, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
     new_x1 <- inv_x1
     new_x2 <- inv_x2
-    jacobian1 <- trf_jacobian(z = x1, alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
-    jacobian2 <- trf_jacobian(z = x2, alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
+    jacobian1 <- trf_jacobian(z = x1, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
+    jacobian2 <- trf_jacobian(z = x2, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
     temp <- jacobian1 * jacobian2
     #temp <- 1.0
     #temp <- 1/temp

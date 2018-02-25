@@ -235,7 +235,7 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
   # Generate Gamma
   gen_trawl <- rltrawl(alpha = alpha,
                        beta = beta,
-                       kappa = kappa,
+                       kappa = 0.0,
                        times = times,
                        trawl_fs = trawl_fs,
                        trawl_fs_prim = trawl_fs_prim,
@@ -253,9 +253,9 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
   }
   
   #print(gen_trawl)
-  prob_zero <- 1-exp(-kappa * gen_trawl)
-  which_zero <- which(prob_zero >= unif_samples)
-
+  prob_zero <- 1.0-exp(-kappa * gen_trawl)
+  which_zero <- which(prob_zero < unif_samples)
+  mean(gen_exceedances)
   #plot(rexp(n = 1, rate = trawl_not_optim[!which_zero]))
   if(transformation){
     gen_exceedances[-which_zero] <-  vapply(rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero]),
@@ -267,18 +267,18 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
   }else{
     gen_exceedances[-which_zero] <-  rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero])
   }
-  
+  mean(gen_exceedances)
   return(gen_exceedances)
 }
 
 
 # Example
 n_sims <- 50
-times <- 1:100
+times <- 1:400
 kappa <- 0.3
 alpha <- 3
-beta <- 1
-rho <- 0.4
+beta <- 6
+rho <- 0.3
 n_moments <- 4
 
 ## Find offset scale
@@ -306,10 +306,20 @@ gen_trawl <- rltrawl(alpha = alpha,
                       n = 1,
                       trawl_fs = trawl_1,
                       trawl_fs_prim = trawl_1_prim,
-                      kappa = 2,
+                      kappa = 0,
                       transformation = F)
 acf(gen_trawl, type = "covariance")
-(alpha)/(beta+kappa)^2
+(alpha)/(beta)^2
+hist(gen_trawl, probability = T)
+lines(seq(0.01, 8, length.out = 200),dgamma(seq(0.01, 8, length.out = 200), shape = alpha, scale = 1/(beta)), col = "red")
+
+#### ACF
+acf(gen_trawl, main = paste("ACF trawl with rho =", rho))
+lines(0:20, exp(-rho*0:20), col = "red")
+
+#### distribution
+plot(density(gen_trawl))
+lines(density(rgamma(n = 10000, shape = alpha, rate = beta)), col="red")
 
 ### no transformation
 (1+kappa/beta)^{-alpha}
@@ -324,8 +334,10 @@ for(i in 1:n_sims){
                       times = times,
                       n = 1,
                       transformation = F)
+  print(mean(gen_exc))
   par_ests_sims_no_trf[i,] <- fExtremes::gpdFit(gen_exc, u =1e-6)@fit$par.ests
 }
+cat("mean:", (1+kappa/beta)^{-alpha}*(beta+kappa)/(alpha-1), "\n")
 
 #### xi
 1/alpha
@@ -342,9 +354,6 @@ mean(par_ests_sims_no_trf[,2])
 sd(par_ests_sims_no_trf[,2])
 # OBS: depending on fitting procedure used: over or under estimation happening gPdtest::gpd.fit and fExtremes::gpdFit
 
-#### ACF
-acf(gen_trawl, main = paste("ACF trawl with rho =", rho))
-lines(0:20, exp(-rho*0:20), col = "red")
 
 ### transformation
 par_ests_sims_trf <- matrix(0, ncol = 2, nrow = n_sims)
@@ -375,3 +384,4 @@ boxplot(par_ests_sims_trf[,2])
 abline(h=(beta)/alpha, col = "red")
 mean(par_ests_sims_trf[,2])
 sd(par_ests_sims_trf[,2])
+
