@@ -157,7 +157,7 @@ trawl_slice_sets_not_optim <- function(alpha, beta, times, n, trawl_fs, trawl_fs
   
   # Using independent scattering of Levy basis to add time dependence to trawls
   for(main_index in 1:(length(times))){
-    results[main_index,] <- results[main_index,] + gamma_sim[(main_index-1) * length(times) + i,]
+    results[main_index,] <- results[main_index,] + gamma_sim[(main_index-1) * length(times) + length(times),]
   }
   
   #results[length(times),] <- results[length(times), ] + gamma_sim[(length(times)-1) * length(times) + length(times),]
@@ -265,7 +265,7 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
                                                                          offset_scale = offset_scale,
                                                                          offset_shape = offset_shape))})
   }else{
-    gen_exceedances[-which_zero] <-  rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero])
+    gen_exceedances[-which_zero] <-  rexp(n = length(gen_trawl[-which_zero]), rate = gen_trawl[-which_zero])
   }
   mean(gen_exceedances)
   return(gen_exceedances)
@@ -306,20 +306,21 @@ gen_trawl <- rltrawl(alpha = alpha,
                       n = 1,
                       trawl_fs = trawl_1,
                       trawl_fs_prim = trawl_1_prim,
-                      kappa = 0,
+                      kappa = 0.0,
                       transformation = F)
 acf(gen_trawl, type = "covariance")
 (alpha)/(beta)^2
 hist(gen_trawl, probability = T)
 lines(seq(0.01, 8, length.out = 200),dgamma(seq(0.01, 8, length.out = 200), shape = alpha, scale = 1/(beta)), col = "red")
 
+par(mfrow=c(1,2))
 #### ACF
 acf(gen_trawl, main = paste("ACF trawl with rho =", rho))
 lines(0:20, exp(-rho*0:20), col = "red")
 
 #### distribution
 plot(density(gen_trawl))
-lines(density(rgamma(n = 10000, shape = alpha, rate = beta)), col="red")
+lines(density(rgamma(n = 1000, shape = alpha, rate = beta+0.9)), col="red")
 
 ### no transformation
 (1+kappa/beta)^{-alpha}
