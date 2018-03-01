@@ -157,7 +157,7 @@ trawl_slice_sets_not_optim <- function(alpha, beta, times, n, trawl_fs, trawl_fs
   
   # Using independent scattering of Levy basis to add time dependence to trawls
   for(main_index in 1:(length(times))){
-    results[main_index,] <- results[main_index,] + gamma_sim[(main_index-1) * length(times) + length(times),]
+    results[main_index,] <- results[main_index,] + gamma_sim[(main_index-1) * length(times)+main_index,]
   }
   
   #results[length(times),] <- results[length(times), ] + gamma_sim[(length(times)-1) * length(times) + length(times),]
@@ -267,7 +267,7 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
   }else{
     gen_exceedances[-which_zero] <-  rexp(n = length(gen_trawl[-which_zero]), rate = gen_trawl[-which_zero])
   }
-  mean(gen_exceedances)
+  #mean(gen_exceedances)
   return(gen_exceedances)
 }
 
@@ -319,8 +319,8 @@ acf(gen_trawl, main = paste("ACF trawl with rho =", rho))
 lines(0:20, exp(-rho*0:20), col = "red")
 
 #### distribution
-plot(density(gen_trawl))
-lines(density(rgamma(n = 1000, shape = alpha, rate = beta+0.9)), col="red")
+plot(density(gen_trawl), "Marginal density of trawls")
+lines(density(rgamma(n = 1000, shape = alpha, rate = beta)), col="red")
 
 ### no transformation
 (1+kappa/beta)^{-alpha}

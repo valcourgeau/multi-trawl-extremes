@@ -38,19 +38,23 @@ gen_exc <- rlexceed(alpha = alpha,
                     trawl_fs_prim = trawl_list_prim,
                     n = 1,
                     transformation = F)
+
 params_to_work_with <- c(alpha, beta, log(rho), log(kappa))
 fn_to_optim <- loglikelihood_pl_univ_ic(times = times,
                                         values = gen_exc,
                                         delta = 4,
                                         lambda = 1.0,
                                         model_vars_names = univ_model_vars_names,
-                                        fixed_names = c("alpha", "beta", "kappa"),
-                                        fixed_params = params_to_work_with[c(1,2,4)],
+                                        fixed_names = c("alpha", "rho", "kappa"),
+                                        fixed_params = params_to_work_with[c(1,3,4)],
                                         logscale = T,
                                         transformation = F)
-
-plot(seq(0.1, 2, length.out = 30), vapply(X = seq(0.1, 2, length.out = 30), FUN = function(x){fn_to_optim(log(x))}, 1.0), type ="l",
-     main="PL", xlab="rho", ylab="PL")
+#sample_d <- vapply(X = seq(0.5, 8, length.out = 30), FUN = function(x){fn_to_optim((x))}, 1.0)
+# plot(seq(0.5, 8, length.out = 30), sample_d, type ="l",
+#      main="PL", xlab="beta", ylab="PL")
+# abline(v = beta, col = "red")
+plot(seq(0.5, 8, length.out = 30), vapply(X = seq(0.5, 8, length.out = 30), FUN = function(x){fn_to_optim((x))}, 1.0), type ="l",
+    main="PL", xlab="rho", ylab="PL")
 plot(seq(0.3, 0.5, length.out = 30), vapply(X = seq(0.3, 0.5, length.out = 30), FUN = function(x){fn_to_optim(log(x))}, 1.0) )
 plot(density(gen_exc))
 hist(gen_exc[gen_exc > 0.1], breaks=20, probability = T)
