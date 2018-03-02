@@ -245,7 +245,7 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
                        offset_scale = offset_scale)
 
   # Uniform threshold
-  unif_samples <- runif(n=length(times)*n)
+  unif_samples <- matrix(runif(n=length(times)*n), nrow = length(times))
   if(n == 1){
     gen_exceedances <- rep(0, length(times))
   }else{
@@ -254,7 +254,7 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
   
   #print(gen_trawl)
   prob_zero <- 1.0-exp(-kappa * gen_trawl)
-  which_zero <- which(prob_zero < unif_samples)
+  which_zero <- which(prob_zero >= unif_samples)
   mean(gen_exceedances)
   #plot(rexp(n = 1, rate = trawl_not_optim[!which_zero]))
   if(transformation){
@@ -271,118 +271,119 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
   return(gen_exceedances)
 }
 
-
-# Example
-n_sims <- 50
-times <- 1:400
-kappa <- 0.3
-alpha <- 3
-beta <- 6
-rho <- 0.3
-n_moments <- 4
-
-## Find offset scale
-offset_shape <- n_moments + 1
-kappa / ((1+kappa/beta)^{alpha/offset_shape} - 1)
-trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
-offset_scale  <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
-
-cat("Prob non zero for non-trf",(1+kappa/beta)^{-alpha}, "\n")
-cat("Prob non zero for trf",(1+kappa/offset_scale)^(-offset_shape), "\n")
-
-## Trawl process simulation
-library(gPdtest)
-
-### Generating the functions
-trawl_1 <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = F)
-trawl_1_prim <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = T)
-
-trl_slice <- trawl_slice_sets_not_optim(alpha = alpha, beta = beta, times = times, trawl_fs = trawl_1, trawl_fs_prim = trawl_1_prim, n = 1)
-
-### no transformation
-gen_trawl <- rltrawl(alpha = alpha,
-                      beta = beta,
-                      times = times,
-                      n = 1,
-                      trawl_fs = trawl_1,
-                      trawl_fs_prim = trawl_1_prim,
-                      kappa = 0.0,
-                      transformation = F)
-acf(gen_trawl, type = "covariance")
-(alpha)/(beta)^2
-hist(gen_trawl, probability = T)
-lines(seq(0.01, 8, length.out = 200),dgamma(seq(0.01, 8, length.out = 200), shape = alpha, scale = 1/(beta)), col = "red")
-
-par(mfrow=c(1,2))
-#### ACF
-acf(gen_trawl, main = paste("ACF trawl with rho =", rho))
-lines(0:20, exp(-rho*0:20), col = "red")
-
-#### distribution
-plot(density(gen_trawl), "Marginal density of trawls")
-lines(density(rgamma(n = 1000, shape = alpha, rate = beta)), col="red")
-
-### no transformation
-(1+kappa/beta)^{-alpha}
-1/(1+kappa)
-par_ests_sims_no_trf <- matrix(0, ncol = 2, nrow = n_sims)
-for(i in 1:n_sims){
-  gen_exc <- rlexceed(alpha = alpha,
-                      beta = beta,
-                      kappa = kappa,
-                      trawl_fs = trawl_1,
-                      trawl_fs_prim = trawl_1_prim,
-                      times = times,
-                      n = 1,
-                      transformation = F)
-  print(mean(gen_exc))
-  par_ests_sims_no_trf[i,] <- fExtremes::gpdFit(gen_exc, u =1e-6)@fit$par.ests
-}
-cat("mean:", (1+kappa/beta)^{-alpha}*(beta+kappa)/(alpha-1), "\n")
-
-#### xi
-1/alpha
-boxplot(par_ests_sims_no_trf[,1])
-abline(h=1/alpha, col = "red")
-mean(par_ests_sims_no_trf[,1])
-sd(par_ests_sims_no_trf[,1])
-
-#### sigma
-(beta+kappa)/alpha
-boxplot(par_ests_sims_no_trf[,2])
-abline(h=(beta+kappa)/alpha, col = "red")
-mean(par_ests_sims_no_trf[,2])
-sd(par_ests_sims_no_trf[,2])
-# OBS: depending on fitting procedure used: over or under estimation happening gPdtest::gpd.fit and fExtremes::gpdFit
-
-
-### transformation
-par_ests_sims_trf <- matrix(0, ncol = 2, nrow = n_sims)
-for(i in 1:n_sims){
-  gen_exc_trf <- rlexceed(alpha = alpha,
-                          beta = beta,
-                          kappa = kappa,
-                          trawl_fs = trawl_1,
-                          trawl_fs_prim = trawl_1_prim,
-                          times = times,
-                          n = 1,
-                          transformation = T)
-  par_ests_sims_trf[i,] <- fExtremes::gpdFit(gen_exc_trf, u =1e-6)@fit$par.ests
-}
-
-#### xi
-10
-1/alpha
-boxplot(par_ests_sims_trf[,1])
-abline(h=1/alpha, col = "red")
-mean(par_ests_sims_trf[,1])
-sd(par_ests_sims_trf[,1])
-
-#### sigma
-(beta+kappa)/alpha
-(beta)/alpha
-boxplot(par_ests_sims_trf[,2])
-abline(h=(beta)/alpha, col = "red")
-mean(par_ests_sims_trf[,2])
-sd(par_ests_sims_trf[,2])
-
+# Various tests
+# {
+#   # Example
+#   n_sims <- 50
+#   times <- 1:400
+#   kappa <- 0.3
+#   alpha <- 3
+#   beta <- 6
+#   rho <- 0.3
+#   n_moments <- 4
+#   
+#   ## Find offset scale
+#   offset_shape <- n_moments + 1
+#   kappa / ((1+kappa/beta)^{alpha/offset_shape} - 1)
+#   trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
+#   offset_scale  <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
+#   
+#   cat("Prob non zero for non-trf",(1+kappa/beta)^{-alpha}, "\n")
+#   cat("Prob non zero for trf",(1+kappa/offset_scale)^(-offset_shape), "\n")
+#   
+#   ## Trawl process simulation
+#   library(gPdtest)
+#   
+#   ### Generating the functions
+#   trawl_1 <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = F)
+#   trawl_1_prim <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = T)
+#   
+#   trl_slice <- trawl_slice_sets_not_optim(alpha = alpha, beta = beta, times = times, trawl_fs = trawl_1, trawl_fs_prim = trawl_1_prim, n = 1)
+#   
+#   ### no transformation
+#   gen_trawl <- rltrawl(alpha = alpha,
+#                         beta = beta,
+#                         times = times,
+#                         n = 1,
+#                         trawl_fs = trawl_1,
+#                         trawl_fs_prim = trawl_1_prim,
+#                         kappa = 0.0,
+#                         transformation = F)
+#   acf(gen_trawl, type = "covariance")
+#   (alpha)/(beta)^2
+#   hist(gen_trawl, probability = T)
+#   lines(seq(0.01, 8, length.out = 200),dgamma(seq(0.01, 8, length.out = 200), shape = alpha, scale = 1/(beta)), col = "red")
+#   
+#   par(mfrow=c(1,2))
+#   #### ACF
+#   acf(gen_trawl, main = paste("ACF trawl with rho =", rho))
+#   lines(0:20, exp(-rho*0:20), col = "red")
+#   
+#   #### distribution
+#   plot(density(gen_trawl), "Marginal density of trawls")
+#   lines(density(rgamma(n = 1000, shape = alpha, rate = beta)), col="red")
+#   
+#   ### no transformation
+#   (1+kappa/beta)^{-alpha}
+#   1/(1+kappa)
+#   par_ests_sims_no_trf <- matrix(0, ncol = 2, nrow = n_sims)
+#   for(i in 1:n_sims){
+#     gen_exc <- rlexceed(alpha = alpha,
+#                         beta = beta,
+#                         kappa = kappa,
+#                         trawl_fs = trawl_1,
+#                         trawl_fs_prim = trawl_1_prim,
+#                         times = times,
+#                         n = 1,
+#                         transformation = F)
+#     print(mean(gen_exc))
+#     par_ests_sims_no_trf[i,] <- fExtremes::gpdFit(gen_exc, u =1e-6)@fit$par.ests
+#   }
+#   cat("mean:", (1+kappa/beta)^{-alpha}*(beta+kappa)/(alpha-1), "\n")
+#   
+#   #### xi
+#   1/alpha
+#   boxplot(par_ests_sims_no_trf[,1])
+#   abline(h=1/alpha, col = "red")
+#   mean(par_ests_sims_no_trf[,1])
+#   sd(par_ests_sims_no_trf[,1])
+#   
+#   #### sigma
+#   (beta+kappa)/alpha
+#   boxplot(par_ests_sims_no_trf[,2])
+#   abline(h=(beta+kappa)/alpha, col = "red")
+#   mean(par_ests_sims_no_trf[,2])
+#   sd(par_ests_sims_no_trf[,2])
+#   # OBS: depending on fitting procedure used: over or under estimation happening gPdtest::gpd.fit and fExtremes::gpdFit
+#   
+#   
+#   ### transformation
+#   par_ests_sims_trf <- matrix(0, ncol = 2, nrow = n_sims)
+#   for(i in 1:n_sims){
+#     gen_exc_trf <- rlexceed(alpha = alpha,
+#                             beta = beta,
+#                             kappa = kappa,
+#                             trawl_fs = trawl_1,
+#                             trawl_fs_prim = trawl_1_prim,
+#                             times = times,
+#                             n = 1,
+#                             transformation = T)
+#     par_ests_sims_trf[i,] <- fExtremes::gpdFit(gen_exc_trf, u =1e-6)@fit$par.ests
+#   }
+#   
+#   #### xi
+#   10
+#   1/alpha
+#   boxplot(par_ests_sims_trf[,1])
+#   abline(h=1/alpha, col = "red")
+#   mean(par_ests_sims_trf[,1])
+#   sd(par_ests_sims_trf[,1])
+#   
+#   #### sigma
+#   (beta+kappa)/alpha
+#   (beta)/alpha
+#   boxplot(par_ests_sims_trf[,2])
+#   abline(h=(beta)/alpha, col = "red")
+#   mean(par_ests_sims_trf[,2])
+#   sd(par_ests_sims_trf[,2])
+# }

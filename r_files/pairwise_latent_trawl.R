@@ -603,3 +603,47 @@ pl_univ <- function(times, values, delta, fixed_names, fixed_params, params, mod
                               logscale = logscale,
                               transformation = transformation))
 }
+
+marginal_gpd_likelihood <- function(values, fixed_names, fixed_params, params, model_vars_names, logscale=T, transformation=F, n_moments=4){
+  if(length(fixed_names) > length(model_vars_names)) stop('Too many fixed parameters compared to number of model params.')
+  if(length(fixed_params) + length(params) != length(model_vars_names)) stop('Wrong number of params compared to model specs.')
+  if(length(fixed_params) != length(fixed_names)) stop('fixed_params and fixed_names should have same length.')
+  
+  opti_params <- !(model_vars_names %in% fixed_names)
+  opti_params_names <- model_vars_names[opti_params]
+  params_all <- rep(0, length(model_vars_names))
+  params_all[opti_params] <- params
+  
+  
+  
+  if(length(fixed_params) > 0){
+    params_all[!opti_params] <- fixed_params
+  }
+  print(params_all)
+  
+  if(transformation){
+    offset_shape <- n_moments + 1
+    offset_scale <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
+    inv_x1 <- trf_inv_g(x1, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
+    inv_x2 <- trf_inv_g(x2, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
+    new_x1 <- inv_x1
+    new_x2 <- inv_x2
+    jacobian1 <- trf_jacobian(z = x1, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
+    jacobian2 <- trf_jacobian(z = x2, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
+    temp <- jacobian1 * jacobian2
+    
+    lik <- vapply(values, 
+                  function(x){
+                      return(dlgpd(x = x, alpha = params[1], beta = params[2]))
+                    },
+                  1.0)
+  }else{
+    lik <- vapply(values, function(x){return(dlgpd(x = x, alpha = params_all[1], beta = params_all[2]))}, 1.0)
+  }
+  
+  if(logscale){
+    return(sum(log(lik[lik > 0.0])))
+  }else{
+    return(prod(lik))
+  }
+}
