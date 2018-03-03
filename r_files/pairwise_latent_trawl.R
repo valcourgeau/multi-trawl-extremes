@@ -62,7 +62,8 @@ trf_g <- function(x, alpha, beta, kappa, offset_scale, offset_shape){
 }
 
 trf_find_offset_scale <- function(alpha, beta, kappa, offset_shape){
-  return(kappa/((1+kappa/beta)^(alpha/offset_shape)-1))
+  return(1.0)
+  #return(kappa/((1+kappa/beta)^(alpha/offset_shape)-1))
 }
 
 # Example
@@ -232,12 +233,14 @@ pairwise_10_exp <- function(t1, x1, t2, alpha, beta, kappa, rho, transformation=
   B2 <- compute_B_inter_exp(rho, t1, t2)
   B3 <- compute_B3_exp(rho, t1, t2)
   
-  temp <- pairwise_10_1(t1, x1, t2, alpha, beta, kappa, rho, trawlA)
-  temp <- temp + pairwise_10_2(t1, x1, t2, alpha, beta, kappa, rho, trawlA, B1, B2, B3)
   
-  # Apply MT
   if(transformation){
+    temp <- pairwise_10_1(t1, new_x, t2, alpha=offset_shape, beta=offset_scale, kappa, rho, trawlA)
+    temp <- temp + pairwise_10_2(t1, new_x, t2, alpha=offset_shape, beta=offset_scale, kappa, rho, trawlA, B1, B2, B3)
     temp <- temp * jacobian
+  }else{
+    temp <- pairwise_10_1(t1, new_x, t2, alpha, beta, kappa, rho, trawlA)
+    temp <- temp + pairwise_10_2(t1, new_x, t2, alpha, beta, kappa, rho, trawlA, B1, B2, B3)
   }
   
   if(temp == 0.0 || is.na(temp) || is.nan(temp)){
@@ -350,8 +353,14 @@ pairwise_11_exp <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformat
   B2 <- compute_B_inter_exp(rho, t1, t2)
   B3 <- compute_B3_exp(rho, t1, t2)
   
-  temp <- temp * pairwise_11_1(t1, new_x1, t2, new_x2, alpha, beta, kappa, rho, B1, B2, B3)
-  temp <- temp * pairwise_11_2(t1, new_x1, t2, new_x2, alpha, beta, kappa, rho, B1, B2, B3)
+  if(transformation){
+    temp <- temp * pairwise_11_1(t1, new_x1, t2, new_x2, alpha = offset_shape, beta = offset_scale, kappa, rho, B1, B2, B3)
+    temp <- temp * pairwise_11_2(t1, new_x1, t2, new_x2, alpha = offset_shape, beta = offset_scale, kappa, rho, B1, B2, B3)
+  }else{
+    temp <- temp * pairwise_11_1(t1, new_x1, t2, new_x2, alpha, beta, kappa, rho, B1, B2, B3)
+    temp <- temp * pairwise_11_2(t1, new_x1, t2, new_x2, alpha, beta, kappa, rho, B1, B2, B3)
+  }
+  
 
   return(temp)
 }
@@ -614,27 +623,27 @@ marginal_gpd_likelihood <- function(values, fixed_names, fixed_params, params, m
   params_all <- rep(0, length(model_vars_names))
   params_all[opti_params] <- params
   
-  
-  
   if(length(fixed_params) > 0){
     params_all[!opti_params] <- fixed_params
   }
-  print(params_all)
   
   if(transformation){
-    offset_shape <- n_moments + 1
-    offset_scale <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
-    inv_x1 <- trf_inv_g(x1, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
-    inv_x2 <- trf_inv_g(x2, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
-    new_x1 <- inv_x1
-    new_x2 <- inv_x2
-    jacobian1 <- trf_jacobian(z = x1, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
-    jacobian2 <- trf_jacobian(z = x2, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
-    temp <- jacobian1 * jacobian2
-    
+    if(length(params_all) < 3) stop('Marginal GPD with transformation requires 3 parameters: alpha, beta and kappa.')
+    print(params_all)
     lik <- vapply(values, 
                   function(x){
-                      return(dlgpd(x = x, alpha = params[1], beta = params[2]))
+                    temp_alpha <- params_all[1]
+                    temp_beta <- params_all[2]
+                    temp_kappa <- params_all[3]
+                    offset_shape <- n_moments + 1
+                    offset_scale <- trf_find_offset_scale(alpha = temp_alpha, beta = temp_beta, 
+                                                          kappa = temp_kappa, offset_shape = offset_shape)
+                    inv_x1 <- trf_inv_g(x1, alpha = temp_alpha, beta = temp_beta, kappa = temp_kappa, 
+                                        offset_scale = offset_scale, offset_shape = offset_shape)
+                    jacobian1 <- trf_jacobian(z = x1, alpha = temp_alpha, beta = temp_beta, kappa = temp_kappa, 
+                                              offset_scale = offset_scale, offset_shape = offset_shape)
+                    temp <- jacobian1
+                      return(dlgpd(x = inv_x1, alpha = offset_shape, beta = offset_scale+temp_kappa)*jacobian1)
                     },
                   1.0)
   }else{
@@ -647,3 +656,30 @@ marginal_gpd_likelihood <- function(values, fixed_names, fixed_params, params, m
     return(prod(lik))
   }
 }
+
+mom_gpd <- function(values_array){
+  # workds under the assumption that alpha > 2
+  # values_array contains the time series with first axis as time and second as # of time series
+  n_dim <- length(values_array[1,])
+  n_values <- length(values_array[,1])
+  alphas_mom <- rep(0, n_dim)
+  betas_mom <- rep(0, n_dim)
+  kappas_mom <- rep(0, n_dim)
+  
+  for(index in 1:n_dim){
+    var_mom <- var(values_array[,index][values_array[,index]>0])
+    mean_mom <- mean(values_array[,index][values_array[,index]>0])
+    p_mom <- length(values_array[,index][values_array[,index]>0])/n_values
+    
+    alphas_mom[index] <- 2*var_mom/(var_mom-mean_mom^2)
+    betas_mom[index] <- mean_mom*(alpha_mom-1)
+    
+    kappas_mom[index] <- betas_mom[index] * (1.0 - p_mom^{1/alphas_mom[index]})
+    betas_mom[index] <- betas_mom[index] - kappas_mom[index]
+  }
+  
+  return(list(alpha=alphas_mom, beta=betas_mom, kappa=kappas_mom,
+              mean_alpha=mean(alphas_mom), mean_beta=mean(betas_mom), mean_kappa=mean(kappas_mom),
+              sd_alpha=sd(alphas_mom), sd_beta=sd(betas_mom), sd_kappa=sd(kappas_mom)))
+}
+

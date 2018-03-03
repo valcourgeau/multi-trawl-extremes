@@ -104,10 +104,146 @@ gen_exc <- rlexceed(alpha = alpha,
                     n = 1,
                     transformation = F)
 
+exceed_p
+compute_mean_std <- function(values_array){
+  # values_array contains the time series with first axis as time and second as # of time series
+  n_dim <- length(values_array[1,])
+  n_values <- length(values_array[,1])
+  results <- rep(0, n_dim)
+  for(index in 1:n_dim){
+    results[index] <- length(which(values_array[,index] > 0))/ n_values
+  }
+  
+  return(list(mean=mean(results), sd=sd(results), prob=results))
+}
+
+compute_mean_std(values_array = exceed_p)
+alpha_values <- seq(alpha/5, alpha*3, length.out = 100)
+beta_values <- seq(beta/5, beta*3, length.out = 100)
+kappa_values <- seq(kappa/5, kappa*3, length.out = 100)
+paras_mom <- mom_gpd(exceed_p)
+
+fn_to_optim <- function(x){return(-marginal_gpd_likelihood(values = trawl_p[,10][trawl_p[,10] > 0.0],
+                                                           fixed_names = c(),
+                                                           fixed_params = c(),
+                                                           params = c(exp(x), beta+kappa),
+                                                           model_vars_names = c("alpha", "beta"),
+                                                           logscale = T,
+                                                           transformation = F,
+                                                           n_moments = 4))}
+fn_to_optim <- function(x){return(-marginal_gpd_likelihood(values = trawl_p[,10][trawl_p[,10] > 0.0],
+                                                           fixed_names = c("alpha", "beta"),
+                                                           fixed_params = c(alpha, beta),
+                                                           params = c(exp(x[1])),
+                                                           model_vars_names = c("alpha","beta", "kappa"),
+                                                           logscale = T,
+                                                           transformation = T,
+                                                           n_moments = 4))}
+res <- optim(par = c(0.3*0.8), fn = fn_to_optim, method = "BFGS")
+exp(res$par)
+alpha
+beta
+
+# TRF
+
+## alpha
+fn_to_optim <- function(x){return(-marginal_gpd_likelihood(values = trawl_p[,10][trawl_p[,10] > 0.0],
+                                                           fixed_names = c("beta", "kappa"),
+                                                           fixed_params = c(beta, kappa),
+                                                           params = c(exp(x[1])),
+                                                           model_vars_names = c("alpha", "beta", "kappa"),
+                                                           logscale = T,
+                                                           transformation = T,
+                                                           n_moments = 4))}
+res_alpha <- optim(par = log(paras_mom$alpha[10]), fn = fn_to_optim, method = "BFGS")
+exp(res_alpha$par)
+alpha
+
+plot(alpha_values, vapply(alpha_values,
+                          function(x){return(-marginal_gpd_likelihood(values = trawl_p[,10][trawl_p[,10] > 0.0],
+                                                                      fixed_names = c("beta", "kappa"),
+                                                                      fixed_params = c(beta, kappa),
+                                                                      params = c(x),
+                                                                      model_vars_names = c("alpha", "beta", "kappa"),
+                                                                      logscale = T,
+                                                                      transformation = T,
+                                                                      n_moments = 4))},
+                          1.0), type = "l", ylab="log-likelihood")
+abline(v=alpha, col="red")
+abline(v=exp(res_alpha$par[1]), col = "blue")
+
+## beta
+fn_to_optim <- function(x){return(-marginal_gpd_likelihood(values = trawl_p[,10][trawl_p[,10] > 0.0],
+                                                           fixed_names = c("alpha", "kappa"),
+                                                           fixed_params = c(alpha, kappa),
+                                                           params = c(exp(x[1])),
+                                                           model_vars_names = c("alpha", "beta", "kappa"),
+                                                           logscale = T,
+                                                           transformation = T,
+                                                           n_moments = 4))}
+res_beta <- optim(par = log(paras_mom$beta[10]), fn = fn_to_optim, method = "BFGS")
+exp(res_beta$par)
+beta
+plot(beta_values, vapply(beta_values,
+                          function(x){return(-marginal_gpd_likelihood(values = trawl_p[,10][trawl_p[,10] > 0.0],
+                                                                      fixed_names = c("alpha", "kappa"),
+                                                                      fixed_params = c(alpha, kappa),
+                                                                      params = c(x),
+                                                                      model_vars_names = c("alpha", "beta", "kappa"),
+                                                                      logscale = T,
+                                                                      transformation = T,
+                                                                      n_moments = 4))},
+                          1.0), type = "l", ylab="log-likelihood")
+abline(v=beta, col="red")
+abline(v=exp(res_beta$par[1]), col = "blue")
+
+## kappa
+fn_to_optim <- function(x){return(-marginal_gpd_likelihood(values = trawl_p[,10][trawl_p[,10] > 0.0],
+                                                           fixed_names = c("alpha", "beta"),
+                                                           fixed_params = c(alpha, beta),
+                                                           params = c(exp(x[1])),
+                                                           model_vars_names = c("alpha", "beta", "kappa"),
+                                                           logscale = T,
+                                                           transformation = T,
+                                                           n_moments = 4))}
+res_kappa <- optim(par = log(0.8*0.3), fn = fn_to_optim, method = "BFGS")
+exp(res_kappa$par)
+kappa
+plot(kappa_values, vapply(kappa_values,
+                         function(x){return(-marginal_gpd_likelihood(values = trf_inv_g(z=trawl_p[,10][trawl_p[,10] > 0.0], alpha = alpha,
+                                                                                        beta = beta, kappa = 0.25/0.75, 
+                                                                                        offset_scale = trf_find_offset_scale(alpha = alpha, beta = beta, 
+                                                                                              kappa = 0.25/0.75, offset_shape = 4)+x,
+                                                                                        offset_shape = 4),
+                                                                     fixed_names = c("alpha"),
+                                                                     fixed_params = c(4),
+                                                                     params = c(trf_find_offset_scale(alpha = alpha, beta = beta, 
+                                                                                                      kappa = 0.25/0.75, offset_shape = 4)+x),
+                                                                     model_vars_names = c("alpha", "beta"),
+                                                                     logscale = T,
+                                                                     transformation = F,
+                                                                     n_moments = 4))},
+                         1.0), type = "l", ylab="log-likelihood")
+abline(v=kappa, col="red")
+abline(v=exp(res_kappa$par[1]), col = "blue")
+
+# Initial guess
+## MoM on GPD(alpha, beta+kappa)
+## Use this and proba > 0 to get kappa: kappa ~ (beta+kappa)*(1-p^{1/alpha})
+## Now we have alpha, beta and kappa individually
+
+
+
 # Warren process
-lw_sim <- rwprocess(alpha = alpha,
-                    beta = alpha,
-                    kappa = alpha,
-                    rho = rho,
-                    timesteps = length(times),
-                    n=1)
+lw_sim <- matrix(0, nrow = length(times), ncol = 10)
+for(index in 1:10){
+ lw_sim[,index] <- rwprocess(alpha = alpha,
+                             beta = beta,
+                             kappa = kappa,
+                             rho = rho,
+                             timesteps = length(times),
+                             n=1)
+}
+
+lw_mom <- mom_gpd(lw_sim)
+acf(lw_sim[,5])
