@@ -216,7 +216,7 @@ rltrawl <- function(alpha, beta, times, trawl_fs, trawl_fs_prim, n, kappa = 0, t
                                           n = n)
   }else{
     results <- trawl_slice_sets_not_optim(alpha = offset_shape,
-                                          beta = offset_scale+kappa,
+                                          beta = offset_scale,
                                           times = times,
                                           trawl_fs = trawl_fs,
                                           trawl_fs_prim = trawl_fs_prim,
@@ -261,7 +261,8 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
     gen_exceedances[-which_zero] <-  vapply(rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero]),
                                           FUN.VALUE = 1.0,
                                           FUN = function(x){return(trf_g(x, alpha = alpha, 
-                                                                         beta = beta, kappa = kappa, 
+                                                                         beta = beta,
+                                                                         kappa = kappa, 
                                                                          offset_scale = offset_scale,
                                                                          offset_shape = offset_shape))})
   }else{

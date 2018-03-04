@@ -51,18 +51,19 @@ is_vector_elem(test_vec, "ele") # Returns False
 
 trf_inv_g <- function(z, alpha, beta, kappa, offset_scale, offset_shape){
   # From GPD(alpha, beta) to GPD(offset, offset+kappa)
-  res <- (offset_scale+kappa)*((1+z/beta)^{alpha/offset_shape}-1)
+  res <- (offset_scale+1.0)*((1+z/(beta+kappa))^{alpha/offset_shape}-1)
   return(res)
 }
 
 trf_g <- function(x, alpha, beta, kappa, offset_scale, offset_shape){
   # From GPD(offset, offset+kappa) to GPD(alpha, beta)
-  res <- beta*((1+x/(offset_scale+kappa))^{offset_shape/alpha}-1)
+  res <- (beta+kappa)*((1+x/(offset_scale+1.0))^{offset_shape/alpha}-1)
   return(res)
 }
 
 trf_find_offset_scale <- function(alpha, beta, kappa, offset_shape){
-  return(1.0)
+  return((1+kappa/beta)^{alpha/offset_shape} - 1)
+  #return(1.0)
   #return(kappa/((1+kappa/beta)^(alpha/offset_shape)-1))
 }
 
@@ -122,7 +123,7 @@ plgpd <- function(x, alpha, beta, lower.tail=F){
 trf_jacobian <- function(z, alpha, beta, kappa, offset_scale, offset_shape){
   # TODO check whether it is numerically stable by division of pdfs
   inv_g_z <- trf_inv_g(z = z, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
-  res <- dlgpd(x = z, alpha = alpha, beta = beta) / dlgpd(x = inv_g_z, alpha = offset_shape, beta = offset_scale + kappa)
+  res <- dlgpd(x = z, alpha = alpha, beta = beta+kappa) / dlgpd(x = inv_g_z, alpha = offset_shape, beta = offset_scale + 1.0)
   return(res)
 }
 
