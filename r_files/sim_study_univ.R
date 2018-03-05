@@ -233,6 +233,43 @@ abline(v=exp(res_kappa$par[1]), col = "blue")
 ## Now we have alpha, beta and kappa individually
 
 
+setwd("~/GitHub/multi-trawl-extremes/data/simulations/")
+e_notrf_4000 <- read.csv(file = "exceed_4000a4b2k0.32485.csv")
+dim(e_notrf_4000)
+delta <- 4
+
+ig_t_notrf_4000 <- initial_guess_trawl(e_notrf_4000)
+params_to_work_with <- c((ig_t_notrf_4000$alpha[1]),
+                         (ig_t_notrf_4000$beta[1]),
+                         log(ig_t_notrf_4000$rho[1]),
+                         log(ig_t_notrf_4000$kappa[1]))
+
+fn_to_optim <- loglikelihood_pl_univ_ic(times = (1:4000),
+                                        values = e_notrf_4000[1:4000,1],
+                                        delta = delta,
+                                        lambda = 0.0,
+                                        model_vars_names = univ_model_vars_names,
+                                        fixed_names = c("alpha"),
+                                        fixed_params = c(4.09),
+                                        logscale = T,
+                                        transformation = F)
+
+system.time(fn_to_optim(params_to_work_with))
+
+optim(params_to_work_with[c(1)], fn_to_optim, method = "BFGS", 
+      hessian = F, control = list(trace=5))$par
+
+optim(params_to_work_with[c(2,3,4)], fn_to_optim, method = "L-BFGS-B", 
+      hessian = F, control = list(trace=5), lower = c(0.5*2.5,-3,-3), upper = c(1.5*2.5,2,2))
+
+# diagnostic plots
+trial_alpha <- seq(0.01, 1, length.out = 15)
+system.time(plot(trial_alpha, vapply(trial_alpha, fn_to_optim, 1)))
+
+xs <- seq(0.1, 2, length.out = 50)
+plot(xs, evir::dgpd(xs, xi = 1/5, beta = (0.1)/5))
+lines(xs, evir::dgpd(xs, xi = 1/alpha, beta = (beta+kappa)/alpha))
+
 
 # Warren process
 lw_sim <- matrix(0, nrow = length(times), ncol = 10)
