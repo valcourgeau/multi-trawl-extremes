@@ -15,7 +15,7 @@ gamma_sqbox <- function(alpha, beta, dt, n){
   return(gamma_box(alpha = alpha, beta = beta, dx = dt, dy = dt, n = n))
 }
 
-trawl_exp <- function(t, rho, max_value=1, min_value=1e-6){
+trawl_exp <- function(t, rho, max_value=1, min_value=1e-2){
   time_eta <- -log(min_value)/rho
   return(function(s){
     if(is.na(s[1])){

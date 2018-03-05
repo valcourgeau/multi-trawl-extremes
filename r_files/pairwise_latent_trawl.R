@@ -391,6 +391,7 @@ answer
 
 pairwise_likelihood_single_pair <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation=F){
   # TODO check whether t1 should be <= t2 or not
+  #print(x1)
   if(x1 < 1e-16){
     if(x2 < 1e-16){
       return(pairwise_00_exp(t1, t2, alpha, beta, kappa, rho))  
@@ -441,15 +442,15 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
           temp <- temp + log(warnon)
         }else{
           if(warnon >= 0.0){
-            temp <- temp - 1000
+            temp <- temp + log(warnon)
           }
         }
       }
     }
     
-    if(temp > 1e14 | abs(temp) == Inf){
-      temp <- 1e10
-    }
+    # if(temp > 1e14 | abs(temp) == Inf){
+    #   temp <- 1e10
+    # }
   }
   
   #cat("Accepted: ", accepted/total, "\n")
@@ -462,8 +463,8 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
 
 pl_single_all_params <- function(times, values, delta, params, logscale=T, transformation=F){
   return(pairwise_likelihood_single_full(times, values, 
-                                         alpha = params[1], 
-                                         beta = params[2], 
+                                         alpha = (params[1]), 
+                                         beta = (params[2]), 
                                          kappa = exp(params[4]), 
                                          rho = exp(params[3]), 
                                          delta = delta, 

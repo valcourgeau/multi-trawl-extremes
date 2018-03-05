@@ -39,6 +39,21 @@
   
   # Function
   {
+    initial_guess_trawl <- function(values_array){
+        mom_estimates <- mom_gpd(values_array)
+        d <- length(mom_estimates$alpha)
+        rho <- rep(0, d)
+        for(index in 1:d){
+          acf_values <- acf(values_array[,index], type="covariance")$acf
+          acf_values <- acf_values[2:(which.min(acf_values > 0.0)-1)]
+          rho[index] <- -line(log(acf_values))$coefficients[2]
+        }
+        mom_estimates$rho <- rho
+        mom_estimates$mean_rho <- mean(rho)
+        mom_estimates$sd_rho <- sd(rho)
+        return(mom_estimates)
+    }
+    
     create_ig_trawl <- function(dataset, quantiles, rho, kappa, trf=F)
     {
       d <- length(dataset[1,]) - 1
@@ -105,53 +120,57 @@
                         logscale = logscale,
                         transformation = transformation)
         
-        # estimating the Information Criterion
-        # H hat
-        f_whole <- function(params){
-          return(pl_univ(times = times,
-                        values = values,
-                        delta = delta,
-                        fixed_names = fixed_names,
-                        fixed_params = fixed_params,
-                        params = params,
-                        model_vars_names = model_vars_names,
-                        transformation = transformation,
-                        logscale = T))
-        }
-        
-        h_hat <- -hessian.f(f = f_whole,
-                            params = params)
-   
         # J hat
         j_hat <- 0.0
         
-        n_max <- length(values)
-        #n_j_estimation <- n_max-delta+1
-        n_j_estimation <- sqrt(length(times))
-        #cat("njesti:", n_j_estimation, "\n")
-        for(start_block in 1:(n_j_estimation)){
-          f_block <- function(params){
-            return(pl_univ(times = times[floor((start_block-1)*n_j_estimation + 1):floor((start_block)*n_j_estimation + 1)],
-                           values = values[floor((start_block-1)*n_j_estimation + 1):floor((start_block)*n_j_estimation + 1)],
-                           delta = delta,
-                           fixed_names = fixed_names,
-                           fixed_params = fixed_params,
-                           params = params,
-                           model_vars_names = model_vars_names,
-                           transformation = transformation,
-                           logscale = T))
-          }
-          tp <- grad.f(f = f_block, params)
-          j_hat <- j_hat + tp %o% tp
-
-          #cat("params:", params, "\n")
-        }
-          if(length(j_hat) > 1){
-            j_hat <- lambda*sum(diag(j_hat %*% matlib::inv(h_hat)))
-          }else{
-            j_hat <- lambda * j_hat / h_hat
+        if(lambda != 0.0){
+          # estimating the Information Criterion
+          # H hat
+          f_whole <- function(params){
+            return(pl_univ(times = times,
+                          values = values,
+                          delta = delta,
+                          fixed_names = fixed_names,
+                          fixed_params = fixed_params,
+                          params = params,
+                          model_vars_names = model_vars_names,
+                          transformation = transformation,
+                          logscale = T))
           }
           
+          h_hat <- -hessian.f(f = f_whole,
+                              params = params)
+     
+         
+          
+          n_max <- length(values)
+          #n_j_estimation <- n_max-delta+1
+          n_j_estimation <- sqrt(length(times))/2
+          #cat("njesti:", n_j_estimation, "\n")
+          for(start_block in 1:(n_j_estimation)){
+            f_block <- function(params){
+              return(pl_univ(times = times[floor((start_block-1)*n_j_estimation + 1):floor((start_block)*n_j_estimation + 1)],
+                             values = values[floor((start_block-1)*n_j_estimation + 1):floor((start_block)*n_j_estimation + 1)],
+                             delta = delta,
+                             fixed_names = fixed_names,
+                             fixed_params = fixed_params,
+                             params = params,
+                             model_vars_names = model_vars_names,
+                             transformation = transformation,
+                             logscale = T))
+            }
+            tp <- grad.f(f = f_block, params)
+            j_hat <- j_hat + tp %o% tp
+  
+            #cat("params:", params, "\n")
+          }
+         
+            if(length(j_hat) > 1){
+              j_hat <- lambda*sum(diag(j_hat %*% matlib::Inverse(h_hat, tol=1e-2)))
+            }else{
+              j_hat <- lambda * j_hat / h_hat
+            }
+        }
           #cat("j_hat:", (j_hat), "\n")
           #print(-temp + j_hat)
           #print(j_hat)

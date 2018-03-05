@@ -5,7 +5,7 @@ source("latent_novel_simulation.R")
 # Example
 set.seed(42)
 n_sims <- 50
-times <- 1:800
+times <- 1:4000
 kappa <- 0.32485
 alpha <- 4
 beta <- 2
@@ -21,7 +21,7 @@ trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = 
 offset_scale  <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
 
 cat("Prob non zero for non-trf",(1+kappa/beta)^{-alpha}, "\n")
-cat("Prob non zero for trf",(1+kappa/offset_scale)^(-offset_shape), "\n")
+cat("Prob non zero for trf",(1+offset_scale)^(-offset_shape), "\n")
 
 ## Trawl process simulation
 library(gPdtest)
@@ -38,6 +38,9 @@ system.time(exceed_p <- rlexceed(alpha = alpha,
                               trawl_fs_prim = trawl_1_prim,
                               n = 10,
                               transformation = F))
+setwd("~/GitHub/multi-trawl-extremes/data/simulations/")
+write.table(exceed_p, file = paste("exceed_", length(times), "a",alpha,"b",beta,"k",kappa, ".csv", sep=""), sep = ",")
+setwd("~/GitHub/multi-trawl-extremes/r_files/")
 
 system.time(exceed_p_trf <- rlexceed(alpha = alpha,
                                  beta = beta,
@@ -48,5 +51,6 @@ system.time(exceed_p_trf <- rlexceed(alpha = alpha,
                                  n = 10,
                                  transformation = T))
 
-
-
+setwd("~/GitHub/multi-trawl-extremes/data/simulations/")
+write.table(exceed_p_trf, file = paste("exceed_trf_", length(times), "a", -alpha, "b", beta, "k", kappa, ".csv", sep=""), sep = ",")
+setwd("~/GitHub/multi-trawl-extremes/r_files/")
