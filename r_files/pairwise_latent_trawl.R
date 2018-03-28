@@ -50,21 +50,20 @@ is_vector_elem(test_vec, "elem") # Returns True
 is_vector_elem(test_vec, "ele") # Returns False
 
 trf_inv_g <- function(z, alpha, beta, kappa, offset_scale, offset_shape){
-  # From GPD(alpha, beta) to GPD(offset, offset+kappa)
+  # From GPD(alpha, beta+kappa) to GPD(offset, offset+1.0)
   res <- (offset_scale+1.0)*((1+z/(beta+kappa))^{alpha/offset_shape}-1)
   return(res)
 }
 
 trf_g <- function(x, alpha, beta, kappa, offset_scale, offset_shape){
-  # From GPD(offset, offset+kappa) to GPD(alpha, beta)
+  # From GPD(offset, offset+1.0) to GPD(alpha, beta+kappa)
   res <- (beta+kappa)*((1+x/(offset_scale+1.0))^{offset_shape/alpha}-1)
   return(res)
 }
 
 trf_find_offset_scale <- function(alpha, beta, kappa, offset_shape){
-  return((1+kappa/beta)^{alpha/offset_shape} - 1)
-  #return(1.0)
-  #return(kappa/((1+kappa/beta)^(alpha/offset_shape)-1))
+  extract_inverse_shape <- (1+kappa/beta)^{alpha/offset_shape} - 1
+  return(1/extract_inverse_shape - 1.0)
 }
 
 # Example
@@ -471,127 +470,6 @@ pl_single_all_params <- function(times, values, delta, params, logscale=T, trans
                                          logscale = T, 
                                          transformation = transformation))
 }
-
-# pl_single_all_params_with_kappa <- function(times, values, delta, kappa, params, logscale=T, transformation=F){
-#   return(pairwise_likelihood_single_full(times, values, 
-#                                          alpha=1/exp(params[1]), 
-#                                          beta=abs(exp(params[2])/exp(params[1])), 
-#                                          kappa=exp(kappa), 
-#                                          rho=exp(params[3]), 
-#                                          delta=delta, 
-#                                          logscale=T, 
-#                                          transformation=transformation))
-# }
-# 
-# pl_single_all_params_with_alpha_beta <- function(times, values, delta, alpha, beta, params, logscale=T, transformation=F){
-#   return(pairwise_likelihood_single_full(times, values, 
-#                                          alpha=alpha, 
-#                                          beta=beta, 
-#                                          kappa=exp(params[2]), 
-#                                          rho=exp(params[1]), 
-#                                          delta=delta, 
-#                                          logscale=T, 
-#                                          transformation=transformation))
-# }
-# 
-# pl_single_all_params_with_alpha_beta_kappa <- function(times, values, delta, alpha, beta, kappa, params, logscale=T, transformation=F){
-#   return(pairwise_likelihood_single_full(times, values, 
-#                                          alpha=alpha, 
-#                                          beta=beta, 
-#                                          kappa=exp(kappa), 
-#                                          rho=exp(params), 
-#                                          delta=delta, 
-#                                          logscale=T, 
-#                                          transformation=transformation))
-# }
-# 
-# pl_final <- function(times, values, deltas, params, logscale=T){
-#   d <- length(values[1,])
-#   mat_params <- t(matrix(params, nrow=4))
-#   print(mat_params)
-#   temp <- 0.0
-#   
-#   for(i in 1:d){
-#     if(mat_params[i,1] <= 0){
-#       trf <- T
-#     }else{
-#       trf <- F
-#     }
-#     temp <- temp + pl_single_all_params(times[,i], values[,i],
-#                                         deltas[i], 
-#                                         mat_params[i,],
-#                                         transformation=trf)
-#   }
-#   
-#   if(logscale){
-#     return(temp)
-#   }else{
-#     return(exp(temp))
-#   }
-# }
-# 
-# pl_final_univ <- function(times, values, delta, params, trf=T, logscale=T){
-#   temp <- pl_single_all_params(times = times, 
-#                                values = values,
-#                                delta = delta, 
-#                                params = params,
-#                                transformation=trf)
-# 
-#   if(logscale){
-#     return(temp)
-#   }else{
-#     return(exp(temp))
-#   }
-# }
-# 
-# pl_final_univ_with_kappa <- function(times, values, delta, kappa, params, trf=T, logscale=T){
-#   temp <- pl_single_all_params_with_kappa(times = times, 
-#                                values = values,
-#                                delta = delta,
-#                                kappa = kappa,
-#                                params = params,
-#                                transformation=trf)
-#   
-#   if(logscale){
-#     return(temp)
-#   }else{
-#     return(exp(temp))
-#   }
-# }
-# 
-# pl_final_univ_with_alpha_beta <- function(times, values, alpha, beta, delta, params, trf=T, logscale=T){
-#   temp <- pl_single_all_params_with_alpha_beta(times = times, 
-#                                                      values = values,
-#                                                      alpha = alpha,
-#                                                      beta = beta,
-#                                                      delta = delta,
-#                                                      params = params,
-#                                                      transformation=trf)
-#   
-#   if(logscale){
-#     return(temp)
-#   }else{
-#     return(exp(temp))
-#   }
-# }
-# 
-# pl_final_univ_with_alpha_beta_kappa <- function(times, values, alpha, beta, delta, kappa, params, trf=T, logscale=T){
-#   temp <- pl_single_all_params_with_alpha_beta_kappa(times = times, 
-#                                           values = values,
-#                                           alpha = alpha,
-#                                           beta = beta,
-#                                           delta = delta,
-#                                           kappa = kappa,
-#                                           params = params,
-#                                           transformation=trf)
-#   
-#   if(logscale){
-#     return(temp)
-#   }else{
-#     return(exp(temp))
-#   }
-# }
-
 
 pl_univ <- function(times, values, delta, fixed_names, fixed_params, params, model_vars_names, logscale=T, transformation=F){
   if(length(fixed_names) > length(model_vars_names)) stop('Too many fixed parameters compared to number of model params.')
