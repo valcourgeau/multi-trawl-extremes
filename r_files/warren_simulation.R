@@ -5,6 +5,7 @@ rw_simulate <- function(alpha, beta, rho, kappa, timesteps, n){
   if(alpha <= 0) stop('alpha should be positive to simulate Warren process.')
   # TODO can only generate for n = 1
   if(rho >= 1 | rho < 0) stop("Rho should be between 0 and 1.")
+  
   latent <- matrix(0, timesteps, 1)
   exceedances <- matrix(0, timesteps, 1)
   latent_lambda <- rgamma(n = n,
@@ -88,7 +89,7 @@ wp_sim_trf <- rwprocess(alpha = alpha,
                     beta = beta,
                     kappa = kappa,
                     rho = rho,
-                    timesteps = 10000,
+                    timesteps = 100000,
                     transformation = T,
                     n=1)
 #(1+kappa/beta)^{-5}
