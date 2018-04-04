@@ -31,10 +31,10 @@ rw_simulate <- function(alpha, beta, rho, kappa, timesteps, n){
 
 rwprocess <- function(alpha, beta, rho, kappa, timesteps, n, transformation=F, n_moments=4){
   if(transformation){
-    offset_scale <- n_moments + 1
-    offset_shape <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
-    return(rw_simulate(alpha = alpha, beta = beta, rho = rho, kappa = kappa, timesteps = timesteps, n = n))
-  }else{
+    offset_shape <- n_moments + 1
+    offset_scale <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
+    print(offset_shape)
+    print(offset_scale)
     temp_sim <- rw_simulate(alpha = offset_shape, 
                             beta = offset_scale, 
                             rho = rho, 
@@ -49,30 +49,56 @@ rwprocess <- function(alpha, beta, rho, kappa, timesteps, n, transformation=F, n
                                    offset_scale = offset_scale, 
                                    offset_shape = offset_shape)
     return(temp_sim)
+  }else{
+    return(rw_simulate(alpha = alpha, beta = beta, rho = rho, kappa = kappa, timesteps = timesteps, n = n))
   }
-  
 }
 
 library('evir')
-wp_sim <- rwprocess(alpha = 3.00,
-                      beta = 1.0,
-                      kappa = 1.7,
-                      rho = 0.4,
-                      timesteps = 10000,
-                      n=1)
-(1+1.7/1.0)^{-3}
-length(which(wp_sim>1e-10))/length(wp_sim)
-plot(wp_sim[,1], type = 'l')
-lines(wp_sim[,2], type = 'l', col="red")
-length(which(wp_sim == 0.0))
-summary(lgp_sim[,1])
-gpd(wp_sim, nextremes = 44)
-plot(wp_sim, type = 'l')
-fExtremes::gpdFit(wp_sim, u = 0.01)
-acf(wp_sim)
 
-plot(density(wp_sim))
-lines(density(rgamma(10000, shape = 3, rate = 1.0)))
+# without trf
+alpha <- 3
+beta <- 2
+kappa <- 1.7
+rho <- 0.4
+wp_sim <- rwprocess(alpha = alpha,
+                      beta = beta,
+                      kappa = kappa,
+                      rho = rho,
+                      timesteps = 100000,
+                      n=1)
+(1+kappa/beta)^{-alpha}
+length(which(wp_sim>0.0))/length(wp_sim)
+fExtremes::gpdFit(wp_sim, u = 0.0)
+acf(wp_sim, lag.max = 10)
+
+plot(density(wp_sim[wp_sim > 0]), xlim = c(-0.5, 50))
+hist(wp_sim[wp_sim > 0], breaks = 50, probability = T, xlim = c(0,50))
+lines(density(fExtremes::rgpd(n = 10000, xi = 1/alpha, beta = (beta+kappa)/alpha)))
+
+plot(density(wp_sim[wp_sim>0.0]))
+lines(density(evir::rgpd(100000, xi=0.33, beta=(1+1.7)/3)))
+
+# with trf
+alpha <- -1
+beta <- 2
+kappa <- 1.7
+rho <- 0.4
+wp_sim_trf <- rwprocess(alpha = alpha,
+                    beta = beta,
+                    kappa = kappa,
+                    rho = rho,
+                    timesteps = 1000,
+                    transformation = T,
+                    n=1)
+(1+kappa/beta)^{-5}
+length(which(wp_sim>0.0))/length(wp_sim)
+fExtremes::gpdFit(wp_sim, u = 0.0)
+acf(wp_sim, lag.max = 10)
+
+plot(density(wp_sim[wp_sim > 0]), xlim = c(-0.5, 50))
+hist(wp_sim[wp_sim > 0], breaks = 50, probability = T, xlim = c(0,50))
+lines(density(fExtremes::rgpd(n = 10000, xi = 1/alpha, beta = (beta+kappa)/alpha)))
 
 plot(density(wp_sim[wp_sim>0.0]))
 lines(density(evir::rgpd(100000, xi=0.33, beta=(1+1.7)/3)))

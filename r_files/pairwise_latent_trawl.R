@@ -62,8 +62,12 @@ trf_g <- function(x, alpha, beta, kappa, offset_scale, offset_shape){
 }
 
 trf_find_offset_scale <- function(alpha, beta, kappa, offset_shape){
-  extract_inverse_shape <- (1+kappa/beta)^{alpha/offset_shape} - 1
-  return(1/extract_inverse_shape - 1.0)
+  #extract_inverse_shape <- (1+kappa/beta)^{alpha/offset_shape} - 1
+  #return(1/extract_inverse_shape - 1.0)
+  
+  # We conserve entropy
+  val_scale <- offset_shape * abs((beta+kappa)/alpha) * exp(1/alpha - 1/offset_shape)
+  return(val_scale - 1)
 }
 
 # Example
