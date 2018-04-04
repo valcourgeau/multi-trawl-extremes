@@ -52,12 +52,18 @@ is_vector_elem(test_vec, "ele") # Returns False
 trf_inv_g <- function(z, alpha, beta, kappa, offset_scale, offset_shape){
   # From GPD(alpha, beta+kappa) to GPD(offset, offset+1.0)
   res <- (offset_scale+1.0)*((1+z/(beta+kappa))^{alpha/offset_shape}-1)
+  if(alpha < 0){
+    res <- -res
+  } 
   return(res)
 }
 
 trf_g <- function(x, alpha, beta, kappa, offset_scale, offset_shape){
   # From GPD(offset, offset+1.0) to GPD(alpha, beta+kappa)
   res <- (beta+kappa)*((1+x/(offset_scale+1.0))^{offset_shape/alpha}-1)
+  if(alpha < 0){
+    res <- -res
+  } 
   return(res)
 }
 

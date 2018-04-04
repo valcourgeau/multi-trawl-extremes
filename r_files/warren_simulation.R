@@ -41,12 +41,12 @@ rwprocess <- function(alpha, beta, rho, kappa, timesteps, n, transformation=F, n
                             kappa = 1.0, 
                             timesteps = timesteps, 
                             n = n)
-    which_zero <- which(temp_sim < 1e-16)
-    temp_sim[-which_zero] <- trf_g(x = temp_sim[-which_zero], 
-                                   alpha = alpha, 
-                                   beta = beta, 
-                                   kappa = kappa, 
-                                   offset_scale = offset_scale, 
+    which_non_zero <- which(temp_sim > 0.0)
+    temp_sim[which_non_zero] <- trf_g(x = temp_sim[which_non_zero],
+                                   alpha = alpha,
+                                   beta = beta,
+                                   kappa = kappa,
+                                   offset_scale = offset_scale,
                                    offset_shape = offset_shape)
     return(temp_sim)
   }else{
@@ -80,7 +80,7 @@ plot(density(wp_sim[wp_sim>0.0]))
 lines(density(evir::rgpd(100000, xi=0.33, beta=(1+1.7)/3)))
 
 # with trf
-alpha <- -1
+alpha <- -5
 beta <- 2
 kappa <- 1.7
 rho <- 0.4
@@ -88,17 +88,18 @@ wp_sim_trf <- rwprocess(alpha = alpha,
                     beta = beta,
                     kappa = kappa,
                     rho = rho,
-                    timesteps = 1000,
+                    timesteps = 10000,
                     transformation = T,
                     n=1)
-(1+kappa/beta)^{-5}
-length(which(wp_sim>0.0))/length(wp_sim)
-fExtremes::gpdFit(wp_sim, u = 0.0)
-acf(wp_sim, lag.max = 10)
+#(1+kappa/beta)^{-5}
+(1+1/trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = 5))^{-5}
+length(which(wp_sim_trf>0.0))/length(wp_sim_trf)
+fExtremes::gpdFit(wp_sim_trf, u = 0.0)
+acf(wp_sim_trf, lag.max = 10)
 
-plot(density(wp_sim[wp_sim > 0]), xlim = c(-0.5, 50))
-hist(wp_sim[wp_sim > 0], breaks = 50, probability = T, xlim = c(0,50))
+plot(density(wp_sim_trf[wp_sim_trf > 0]), xlim = c(-0.5, 50))
+hist(wp_sim_trf[wp_sim_trf > 0], breaks = 50, probability = T, xlim = c(0,50))
 lines(density(fExtremes::rgpd(n = 10000, xi = 1/alpha, beta = (beta+kappa)/alpha)))
 
-plot(density(wp_sim[wp_sim>0.0]))
+plot(density(wp_sim_trf[wp_sim_trf>0.0]))
 lines(density(evir::rgpd(100000, xi=0.33, beta=(1+1.7)/3)))
