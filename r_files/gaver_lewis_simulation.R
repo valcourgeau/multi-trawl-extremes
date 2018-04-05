@@ -38,8 +38,6 @@ rlgprocess <- function(alpha, beta, rho, kappa, timesteps, n, transformation=F, 
   if(transformation){
     offset_shape <- n_moments + 1
     offset_scale <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
-    print(offset_shape)
-    print(offset_scale)
     temp_sim <- rlg_simulate(alpha = offset_shape, 
                             beta = offset_scale, 
                             rho = rho, 
@@ -70,7 +68,6 @@ lgp_sim <- rlgprocess(alpha = 3.00,
                       n=1)
 length(which(lgp_sim>0.0)/length(lgp_sim))
 plot(lgp_sim[,1], type = 'l')
-lines(lgp_sim[,2], type = 'l', col="red")
 summary(lgp_sim[,1])
 gpd(lgp_sim, threshold = 1e-10)$par.est
 c(1/3,  (1+1.7)/3)

@@ -34,8 +34,6 @@ rwprocess <- function(alpha, beta, rho, kappa, timesteps, n, transformation=F, n
   if(transformation){
     offset_shape <- n_moments + 1
     offset_scale <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
-    print(offset_shape)
-    print(offset_scale)
     temp_sim <- rw_simulate(alpha = offset_shape, 
                             beta = offset_scale, 
                             rho = rho, 
@@ -100,7 +98,7 @@ acf(wp_sim_trf, lag.max = 10)
 
 plot(density(wp_sim_trf[wp_sim_trf > 0]), xlim = c(-0.5, 50))
 hist(wp_sim_trf[wp_sim_trf > 0], breaks = 50, probability = T, xlim = c(0,50))
-lines(density(fExtremes::rgpd(n = 10000, xi = 1/alpha, beta = (beta+kappa)/alpha)))
+lines(density(fExtremes::rgpd(n = 10000, xi = 1/alpha, beta = -(beta+kappa)/alpha)))
 
 plot(density(wp_sim_trf[wp_sim_trf>0.0]))
 lines(density(evir::rgpd(100000, xi=0.33, beta=(1+1.7)/3)))

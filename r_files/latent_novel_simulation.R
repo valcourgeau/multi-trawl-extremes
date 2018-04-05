@@ -101,7 +101,8 @@ trawl_deterministic <- function(trawl_f, alpha, beta, dt, n = n){
 slice_area <- function(i, j, times, trawl_f_prim){
   prim_info <- trawl_f_prim(NA)
   origin_time <- prim_info$trawl_time
-  times <- sort(times)
+  # TODO make sure times are sorted before using this function
+  # times <- sort(times)
   if(i != 1 & j != length(times)){
     temp <- trawl_f_prim(times[i] - times[j] + origin_time)
     temp <- temp - trawl_f_prim(times[i] - times[j+1] + origin_time)
@@ -165,6 +166,60 @@ trawl_slice_sets_not_optim <- function(alpha, beta, times, n, trawl_fs, trawl_fs
   return(results)
 }
 
+
+trawl_slice_sets_not_optim_2 <- function(alpha, beta, times, n, trawl_fs, trawl_fs_prim){
+  # TODO sort the trawl_fs and trawl_fs_prim as the times
+  # TODO current_trawl and going further back? instead of 8
+  
+  if(!is.list(trawl_fs)) stop('Wrong type: trawl set should be a list.')
+  
+  deep_cols <-  30 # TODO render this customisable
+  
+  times <- sort(times)
+  A <- trawl_fs[[1]](NA)$A # TODO A special for each timestep
+  slice_mat <- matrix(0, nrow = length(times), ncol = deep_cols)
+  gamma_sim <- matrix(0, length(times) * deep_cols, ncol= n)
+  
+  # Creating the matrix of gamma realisations
+  for(main_index in 1:length(times)){
+    for(second_index in 1:deep_cols){
+      slice_mat[main_index, second_index] <- slice_area(main_index, min(second_index + main_index - 1, length(times)), times, trawl_fs_prim[[main_index]])
+      #if(slice_mat[main_index, second_index] > 1e-16){
+        gamma_sim[(main_index-1) * deep_cols + second_index,] <- rgamma(shape = alpha * slice_mat[main_index, second_index] / A,
+                                                                        rate = beta,
+                                                                        n = n) 
+      #}
+    }
+  }
+  
+  # Going back in time to use the dep structure
+  n_trawl_forward <- trawl_fs[[1]](NA)$time_eta
+  n_trawl_forward <- deep_cols # TODO remove this
+  
+  # Using independent scattering of Levy basis to add time dependence to trawls
+  results <- matrix(0, nrow = length(times), ncol = n)
+  for(current_trawl in 1:length(times)){
+    for(back_trawl in max(1, current_trawl-8+1):current_trawl){
+      for(slice_piece in (current_trawl-back_trawl+1):min(deep_cols, length(times)-back_trawl+1)){
+        if(back_trawl != current_trawl | slice_piece > 1){
+          #if(sum(abs(gamma_sim[(back_trawl-1) * deep_cols + slice_piece,])) > 1e-16){
+            results[current_trawl,] <- results[current_trawl,] + gamma_sim[(back_trawl-1) * deep_cols + slice_piece,]
+         # }
+        }
+      }
+    }
+  }
+  
+  # Adding the part that is unique to each column: the top
+  for(main_index in 1:(length(times))){
+    results[main_index,] <- results[main_index,] + gamma_sim[(main_index-1) * deep_cols + 1,]
+  }
+  
+  #results[length(times),] <- results[length(times), ] + gamma_sim[(length(times)-1) * length(times) + length(times),]
+  
+  return(results)
+}
+
 trawl_slice_sets <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
   times <- sort(times)
   trawl_info <- trawl_f(NA)
@@ -206,16 +261,16 @@ rltrawl <- function(alpha, beta, times, trawl_fs, trawl_fs_prim, n, kappa = 0, t
     stop('When using marginal trf, indicate shape and scale offsets.')
   }
   
-  
+  ## USING _2 HERE WARNING
   if(!transformation){
-    results <- trawl_slice_sets_not_optim(alpha = alpha,
+    results <- trawl_slice_sets_not_optim_2(alpha = alpha,
                                           beta = beta+kappa,
                                           times = times,
                                           trawl_fs = trawl_fs,
                                           trawl_fs_prim = trawl_fs_prim,
                                           n = n)
   }else{
-    results <- trawl_slice_sets_not_optim(alpha = offset_shape,
+    results <- trawl_slice_sets_not_optim_2(alpha = offset_shape,
                                           beta = offset_scale,
                                           times = times,
                                           trawl_fs = trawl_fs,
