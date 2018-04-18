@@ -166,16 +166,15 @@ trawl_slice_sets_not_optim <- function(alpha, beta, times, n, trawl_fs, trawl_fs
   return(results)
 }
 
-
 trawl_slice_sets_not_optim_2 <- function(alpha, beta, times, n, trawl_fs, trawl_fs_prim){
   # TODO sort the trawl_fs and trawl_fs_prim as the times
   # TODO current_trawl and going further back? instead of 8
   
   if(!is.list(trawl_fs)) stop('Wrong type: trawl set should be a list.')
   
-  deep_cols <-  30 # TODO render this customisable
+  deep_cols <- 30 # TODO render this customisable
   
-  times <- sort(times)
+  #times <- sort(times)
   A <- trawl_fs[[1]](NA)$A # TODO A special for each timestep
   slice_mat <- matrix(0, nrow = length(times), ncol = deep_cols)
   gamma_sim <- matrix(0, length(times) * deep_cols, ncol= n)
@@ -184,7 +183,8 @@ trawl_slice_sets_not_optim_2 <- function(alpha, beta, times, n, trawl_fs, trawl_
   for(main_index in 1:length(times)){
     for(second_index in 1:deep_cols){
       slice_mat[main_index, second_index] <- slice_area(main_index, min(second_index + main_index - 1, length(times)), times, trawl_fs_prim[[main_index]])
-      #if(slice_mat[main_index, second_index] > 1e-16){
+      #if(slice_mat[main_index, second_index] > 1e-3){
+      #print(alpha * slice_mat[main_index, second_index] / A)
         gamma_sim[(main_index-1) * deep_cols + second_index,] <- rgamma(shape = alpha * slice_mat[main_index, second_index] / A,
                                                                         rate = beta,
                                                                         n = n) 
@@ -193,13 +193,13 @@ trawl_slice_sets_not_optim_2 <- function(alpha, beta, times, n, trawl_fs, trawl_
   }
   
   # Going back in time to use the dep structure
-  n_trawl_forward <- trawl_fs[[1]](NA)$time_eta
+  # n_trawl_forward <- trawl_fs[[1]](NA)$time_eta
   n_trawl_forward <- deep_cols # TODO remove this
   
   # Using independent scattering of Levy basis to add time dependence to trawls
   results <- matrix(0, nrow = length(times), ncol = n)
   for(current_trawl in 1:length(times)){
-    for(back_trawl in max(1, current_trawl-8+1):current_trawl){
+    for(back_trawl in max(1, current_trawl-15+1):current_trawl){
       for(slice_piece in (current_trawl-back_trawl+1):min(deep_cols, length(times)-back_trawl+1)){
         if(back_trawl != current_trawl | slice_piece > 1){
           #if(sum(abs(gamma_sim[(back_trawl-1) * deep_cols + slice_piece,])) > 1e-16){
@@ -220,7 +220,72 @@ trawl_slice_sets_not_optim_2 <- function(alpha, beta, times, n, trawl_fs, trawl_
   return(results)
 }
 
-trawl_slice_sets <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
+trawl_slice_sets_not_optim_3 <- function(alpha, beta, times, n, trawl_fs, trawl_fs_prim){
+  # TODO sort the trawl_fs and trawl_fs_prim as the times
+  # TODO current_trawl and going further back? instead of 8
+  
+  if(!is.list(trawl_fs)) stop('Wrong type: trawl set should be a list.')
+  
+  deep_cols <- 30 # TODO render this customisable
+  n_times <- length(times)
+  
+  
+  #times <- sort(times)
+  A <- trawl_fs[[1]](NA)$A # TODO A special for each timestep
+  slice_mat <- matrix(0, nrow = n_times, ncol = deep_cols)
+  gamma_sim <- matrix(0, nrow = n_times, ncol = deep_cols)
+  
+  # Creating the matrix of gamma realisations
+  for(main_index in 1:n_times){
+    for(second_index in 1:deep_cols){
+      slice_mat[main_index, second_index] <- slice_area(main_index, min(second_index + main_index - 1, n_times), times, trawl_fs_prim[[main_index]])
+      #if(slice_mat[main_index, second_index] > 1e-3){
+      #print(alpha * slice_mat[main_index, second_index] / A)
+      gamma_sim[main_index, second_index] <- rgamma(shape = alpha * slice_mat[main_index, second_index] / A,
+                                                                      rate = beta,
+                                                                      n = 1) 
+      #}
+    }
+  }
+  
+  # Going back in time to use the dep structure
+  # n_trawl_forward <- trawl_fs[[1]](NA)$time_eta
+  n_trawl_forward <- deep_cols # TODO remove this
+  
+  # Using independent scattering of Levy basis to add time dependence to trawls
+  results <- matrix(0, nrow = length(times), ncol = 1)
+  # for(current_trawl in 1:length(times)){
+  #   for(back_trawl in max(1, current_trawl-15+1):current_trawl){
+  #     for(slice_piece in (current_trawl-back_trawl+1):min(deep_cols, length(times)-back_trawl+1)){
+  #       if(back_trawl != current_trawl | slice_piece > 1){
+  #         #if(sum(abs(gamma_sim[(back_trawl-1) * deep_cols + slice_piece,])) > 1e-16){
+  #         results[current_trawl,] <- results[current_trawl,] + gamma_sim[(back_trawl-1) * deep_cols + slice_piece,]
+  #         # }
+  #       }
+  #     }
+  #   }
+  # }
+  
+  upper.anti.tri<-function(m) col(m)+row(m) < dim(m)[1]+1
+  anti_diag_mat <- matrix(1, deep_cols, deep_cols)
+  anti_diag_mat[upper.anti.tri(anti_diag_mat)] <- 0
+  results <- vapply(1:(n_times - deep_cols), 
+                    function(i){
+                      return(sum(gamma_sim[i:(i - 1 + deep_cols),] * anti_diag_mat))
+                    },
+                    1.0)
+  
+  # Adding the part that is unique to each column: the top
+  # for(main_index in 1:(length(times))){
+  #   results[main_index,] <- results[main_index,] + gamma_sim[(main_index-1) * deep_cols + 1,]
+  # }
+  
+  #results[length(times),] <- results[length(times), ] + gamma_sim[(length(times)-1) * length(times) + length(times),]
+  
+  return(results)
+}
+
+ftrawl_slice_sets <- function(alpha, beta, times, trawl_f, trawl_f_prim, n){
   times <- sort(times)
   trawl_info <- trawl_f(NA)
   A <- trawl_info$A
@@ -263,14 +328,14 @@ rltrawl <- function(alpha, beta, times, trawl_fs, trawl_fs_prim, n, kappa = 0, t
   
   ## USING _2 HERE WARNING
   if(!transformation){
-    results <- trawl_slice_sets_not_optim_2(alpha = alpha,
+    results <- trawl_slice_sets_not_optim_3(alpha = alpha,
                                           beta = beta+kappa,
                                           times = times,
                                           trawl_fs = trawl_fs,
                                           trawl_fs_prim = trawl_fs_prim,
                                           n = n)
   }else{
-    results <- trawl_slice_sets_not_optim_2(alpha = offset_shape,
+    results <- trawl_slice_sets_not_optim_3(alpha = offset_shape,
                                           beta = offset_scale,
                                           times = times,
                                           trawl_fs = trawl_fs,
@@ -282,6 +347,7 @@ rltrawl <- function(alpha, beta, times, trawl_fs, trawl_fs_prim, n, kappa = 0, t
 }
 
 rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, transformation, n_moments = 4){
+  # TODO n is not implemented yet
   offset_shape <- n_moments+1
   offset_scale <- trf_find_offset_scale(alpha = alpha,
                                        beta = beta,
@@ -298,22 +364,20 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
                        transformation = transformation,
                        offset_shape = offset_shape,
                        offset_scale = offset_scale)
-
+  # return(gen_trawl)
   # Uniform threshold
-  unif_samples <- matrix(runif(n=length(times)*n), nrow = length(times))
+  unif_samples <- runif(n=length(times)-deep_cols)
   if(n == 1){
-    gen_exceedances <- rep(0, length(times))
+    gen_exceedances <- rep(0, length(times)-deep_cols)
   }else{
-    gen_exceedances <- matrix(0, nrow = length(times), ncol = n)
+    gen_exceedances <- matrix(0, nrow = length(times)-deep_cols, ncol = n)
   }
   
   #print(gen_trawl)
   prob_zero <- 1.0-exp(-kappa * gen_trawl)
   which_zero <- which(prob_zero >= unif_samples)
-  mean(gen_exceedances)
-  #plot(rexp(n = 1, rate = trawl_not_optim[!which_zero]))
   if(transformation){
-    gen_exceedances[-which_zero] <-  vapply(rexp(n = length(gen_trawl)-length(which_zero), rate = gen_trawl[-which_zero]),
+    gen_exceedances[-which_zero] <-  vapply(rexp(n = length(gen_trawl[-which_zero]), rate = gen_trawl[-which_zero]),
                                           FUN.VALUE = 1.0,
                                           FUN = function(x){return(trf_g(x, alpha = alpha, 
                                                                          beta = beta,

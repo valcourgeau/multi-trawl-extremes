@@ -1,67 +1,170 @@
 setwd("~/GitHub/multi-trawl-extremes/r_files/")
+source('latent_novel_simulation.R')
+source('pairwise_latent_trawl.R')
 source("imp_latent_noven_final.R")
 source("latent_novel_simulation.R")
 source("imp_warren.R")
 
+# NO TRF
+## CASE 1
 # General parameters
-set.seed(42)
-kappa <- 0.9
-alpha <- 5
-beta <- 5
-rho <- 0.4
-n_moments <- 4
-times <- 1:1000
+alpha_true <- 4
+beta_true <- 4
+rho_true <- 0.2
+kappa_true <- 3.113118
 
-(1+kappa/beta)^{-alpha}
+latent_1 <- read.csv("latent_4_4_3.113118_0.2_30.csv", sep = " ")
+# latent_1 <- latent_1[,1:2]
+mom_l1 <- initial_guess_trawl(latent_1)
+index<-1
+n_timestamps <- 4400 - 1 
+n_sims <- 30
+mat_res <- matrix(0, nrow = n_sims, ncol = 4)
 
-## Trawl process simulation
-library(gPdtest)
+for(index in 1:n_sims){
+  params_to_work_with <- rep(0, 4)
+  fit_marginal <-  fExtremes::gpdFit(latent_1[1:n_timestamps,index][latent_1[1:n_timestamps,index] > 0], u= 0)@fit$fit$par
+  p_nz <- length(which(latent_1[1:n_timestamps,index] > 0))/length(latent_1[1:n_timestamps,index])
+  
+  params_to_work_with <- rep(0, 4)
+  params_to_work_with[1] <- 1/fit_marginal[1]
+  params_to_work_with[2] <- fit_marginal[2]*params_to_work_with[1]
+  params_to_work_with[3] <- if(mom_l1$rho[index] != Inf) mom_l1$rho[index] else mom_l1$mean_rho
+  params_to_work_with[4] <- params_to_work_with[2]*(p_nz^{-1/params_to_work_with[1]}-1) / (p_nz^{-1/params_to_work_with[1]})
+  params_to_work_with[2] <- params_to_work_with[2] - params_to_work_with[4]
+  params_to_work_with[4] <- (params_to_work_with[4])
+  
+  ##TODO CHECK NAMES OF VARIABLES !!!!
+  fn_to_optim <- loglikelihood_pl_univ_ic(times = 1:n_timestamps,
+                                          values = latent_1[1:n_timestamps,index],
+                                          delta = 4,
+                                          lambda = 0.0,
+                                          model_vars_names = univ_model_vars_names,
+                                          fixed_names = c(),
+                                          fixed_params = c(),
+                                          logscale = T,
+                                          transformation = F)
+  # lower_b <- 0.8*params_to_work_with
+  # lower_b[3] <- -2.3
+  # upper_b <- 1.3*params_to_work_with
+  # upper_b[3] <- -0.001
+  # 
+  lower_b <- c(3,0.5,exp(-2.5),exp(0.2))
+  upper_b <- c(10,10,exp(-0.01),exp(3))
+  
+  params_to_work_with
+  lower_b
+  upper_b
+  
+  res <- optim(fn = fn_to_optim, par = params_to_work_with[c(1,2,3,4)], control = list(trace=3, pgtol=1e5),#, factr=1e10),
+               method = "L-BFGS-B", lower = lower_b, upper=upper_b)
+  print(index)
+  print(res$par)
+  mat_res[index,] <- res$par
+  #print(mat_res[index,])
+}
 
-### Generating the functions
-trawl_list <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = F)
-trawl_list_prim <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = T)
 
-# no trf
-gen_trawl <- rltrawl(alpha = alpha,
-                     beta = beta,
-                     times = times,
-                     n = 1,
-                     trawl_fs = trawl_list,
-                     trawl_fs_prim = trawl_list_prim,
-                     kappa = kappa,
-                     transformation = F)
-gen_exc <- rlexceed(alpha = alpha,
-                    beta = beta,
-                    kappa = kappa,
-                    times = times,
-                    trawl_fs = trawl_list,
-                    trawl_fs_prim = trawl_list_prim,
-                    n = 1,
-                    transformation = F)
 
-params_to_work_with <- c(alpha, beta, log(rho), log(kappa))
-fn_to_optim <- loglikelihood_pl_univ_ic(times = times,
-                                        values = gen_exc,
+## CASE 2
+# General parameters
+alpha_true <- 9
+beta_true <- 1
+rho_true <- 0.05
+kappa_true <- 0.75
+
+latent_1 <- read.csv("latent_9_1_0.75_0.05_30.csv", sep = " ")
+# latent_1 <- latent_1[,1:2]
+mom_l1 <- initial_guess_trawl(latent_1)
+index<-1
+n_timestamps <- 4400 - 1 
+n_sims <- 30
+mat_res <- matrix(0, nrow = n_sims, ncol = 4)
+
+for(index in 1:n_sims){
+  params_to_work_with <- rep(0, 4)
+  fit_marginal <-  fExtremes::gpdFit(latent_1[1:n_timestamps,index][latent_1[1:n_timestamps,index] > 0], u= 0)@fit$fit$par
+  p_nz <- length(which(latent_1[1:n_timestamps,index] > 0))/length(latent_1[1:n_timestamps,index])
+  
+  params_to_work_with <- rep(0, 4)
+  params_to_work_with[1] <- 1/fit_marginal[1]
+  params_to_work_with[2] <- fit_marginal[2]*params_to_work_with[1]
+  params_to_work_with[3] <- if(mom_l1$rho[index] != Inf) mom_l1$rho[index] else mom_l1$mean_rho
+  params_to_work_with[4] <- params_to_work_with[2]*(p_nz^{-1/params_to_work_with[1]}-1) / (p_nz^{-1/params_to_work_with[1]})
+  params_to_work_with[2] <- params_to_work_with[2] - params_to_work_with[4]
+  params_to_work_with[4] <- (params_to_work_with[4])
+  #print(params_to_work_with)
+  
+  ##TODO CHECK NAMES OF VARIABLES !!!!
+  fn_to_optim <- loglikelihood_pl_univ_ic(times = 1:n_timestamps,
+                                          values = latent_1[1:n_timestamps,index],
+                                          delta = 4,
+                                          lambda = 0.0,
+                                          model_vars_names = univ_model_vars_names,
+                                          fixed_names = c(),
+                                          fixed_params = c(),
+                                          logscale = T,
+                                          transformation = F)
+  # lower_b <- 0.8*params_to_work_with
+  # lower_b[3] <- -2.3
+  # upper_b <- 1.3*params_to_work_with
+  # upper_b[3] <- -0.001
+  # 
+  lower_b <- c(4,
+               0.1,
+               0.01,
+               0.2
+               )
+  upper_b <- c(12,
+               15,
+               0.8,
+               1.0
+               )
+  
+  params_to_work_with
+  lower_b
+  upper_b
+  
+  res <- optim(fn = fn_to_optim, par = params_to_work_with[c(1,2,3,4)], control = list(trace=3, pgtol=1),#, factr=1e10),
+               method = "L-BFGS-B", lower = lower_b, upper=upper_b)
+  print(index)
+  print(params_to_work_with)
+  print(res$par)
+  mat_res[index,] <- res$par
+  #print(mat_res[index,])
+}
+
+
+
+
+
+
+#library(DEoptim)
+#DEoptim::DEoptim(fn_to_optim, lower = lower_b, upper_b, control = DEoptim.control(trace=T, itermax=200))
+
+fn_to_optim <- loglikelihood_pl_univ_ic(times = 1:500,
+                                        values = latent_1[1:500,index],
                                         delta = 4,
-                                        lambda = 1.0,
+                                        lambda = 0.0,
                                         model_vars_names = univ_model_vars_names,
-                                        fixed_names = c("alpha", "rho", "kappa"),
-                                        fixed_params = params_to_work_with[c(1,3,4)],
+                                        fixed_names = c("beta", "rho"),
+                                        fixed_params = c(4, -1.6),#c(params_to_work_with[c(2,3,4)]),
                                         logscale = T,
                                         transformation = F)
-#sample_d <- vapply(X = seq(0.5, 8, length.out = 30), FUN = function(x){fn_to_optim((x))}, 1.0)
-# plot(seq(0.5, 8, length.out = 30), sample_d, type ="l",
-#      main="PL", xlab="beta", ylab="PL")
-# abline(v = beta, col = "red")
-plot(seq(0.5, 8, length.out = 30), vapply(X = seq(0.5, 8, length.out = 30), FUN = function(x){fn_to_optim((x))}, 1.0), type ="l",
-    main="PL", xlab="rho", ylab="PL")
-plot(seq(0.3, 0.5, length.out = 30), vapply(X = seq(0.3, 0.5, length.out = 30), FUN = function(x){fn_to_optim(log(x))}, 1.0) )
-plot(density(gen_exc))
-hist(gen_exc[gen_exc > 0.1], breaks=20, probability = T)
-points(dlgpd(c(0.1,0.8), alpha = 8, beta = 6+kappa))
-plot(density(gen_exc[gen_exc > 0]))
-lines(seq(0.001,10,length.out = 100), dlgpd(x = seq(0.001,10,length.out = 100), alpha = alpha, beta = beta+kappa))
-gPdtest::gpd.fit(gen_exc[gen_exc > 0], method = "amle")
+plot(seq(0.1,2,length.out = 20), vapply(seq(0.1,2,length.out = 20), fn_to_optim, 1))
+n_points_grid <- 20
+alpha_s <- seq(2.5,10,length.out = n_points_grid)
+beta_s <- seq(0.1,2,length.out = n_points_grid)
+vis_mat <- matrix(0, ncol=n_points_grid, nrow=n_points_grid)
+
+for(index_a in 1:n_points_grid){
+  for(index_b in 1:n_points_grid){
+    vis_mat[index_a,index_b] <- fn_to_optim(c(alpha_s[index_a], beta_s[index_b]))
+  }
+  print(index_a)
+}
+library(plot3D)
+persp3D(alpha_s, beta_s, vis_mat, theta = 10, phi = 40)
 
 # estimating the ACF
 trawl_list_grp <- collection_trawl(times = 1:50, params = list(rho=rho), type = "exp", prim = F)

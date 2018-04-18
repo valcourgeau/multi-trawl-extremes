@@ -141,11 +141,10 @@
           h_hat <- -hessian.f(f = f_whole,
                               params = params)
      
-         
           
           n_max <- length(values)
           #n_j_estimation <- n_max-delta+1
-          n_j_estimation <- sqrt(length(times))/2
+          n_j_estimation <- sqrt(length(times))
           #cat("njesti:", n_j_estimation, "\n")
           for(start_block in 1:(n_j_estimation)){
             f_block <- function(params){
@@ -159,23 +158,37 @@
                              transformation = transformation,
                              logscale = T))
             }
-            tp <- grad.f(f = f_block, params)
+            tp <- grad.f(f = f_block, params, epsilon = 1e-7)
             j_hat <- j_hat + tp %o% tp
   
             #cat("params:", params, "\n")
           }
          
             if(length(j_hat) > 1){
+              
+              h_hat <- h_hat/n_max
+              #print(h_hat)
+              j_hat <- j_hat/n_j_estimation
+              #print(matlib::Inverse(h_hat, tol=1e-2) %*% j_hat %*% matlib::Inverse(h_hat, tol=1e-2))
+              # print("------VAR------")
+              # print(matlib::Inverse(h_hat, tol=1e-3) %*% j_hat %*% matlib::Inverse(h_hat, tol=1e-3) / n_j_estimation)
+              # print("-----ENDVAR------")
+              
               j_hat <- lambda*sum(diag(j_hat %*% matlib::Inverse(h_hat, tol=1e-2)))
+              j_hat <- j_hat * log(n_j_estimation)
+              
+              #print(matlib::Inverse(j_hat, tol=1e-3) %*% h_hat %*% matlib::Inverse(j_hat, tol=1e-3))
+              #j_hat <- lambda*sum(diag(matlib::Inverse(j_hat, tol=1e-3) %*% h_hat))*n_j_estimation
             }else{
-              j_hat <- lambda * j_hat / h_hat
+              j_hat <- lambda * j_hat / h_hat / n_j_estimation * n_max
             }
         }
           #cat("j_hat:", (j_hat), "\n")
           #print(-temp + j_hat)
           #print(j_hat)
           #print(j_hat)
-          return(-temp + j_hat)
+          #print(params)
+          return(-2*temp + j_hat)
         
       })
     }

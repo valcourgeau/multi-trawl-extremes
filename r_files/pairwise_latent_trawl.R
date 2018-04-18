@@ -51,19 +51,14 @@ is_vector_elem(test_vec, "ele") # Returns False
 
 trf_inv_g <- function(z, alpha, beta, kappa, offset_scale, offset_shape){
   # From GPD(alpha, beta+kappa) to GPD(offset, offset+1.0)
-  res <- (offset_scale+1.0)*((1+z/(beta+kappa))^{alpha/offset_shape}-1)
-  if(alpha < 0){
-    res <- -res
-  } 
+  res <- (offset_scale+1.0)*((1+sign(alpha)*z/(beta+kappa))^{alpha/offset_shape}-1)
+
   return(res)
 }
 
 trf_g <- function(x, alpha, beta, kappa, offset_scale, offset_shape){
   # From GPD(offset, offset+1.0) to GPD(alpha, beta+kappa)
-  res <- (beta+kappa)*((1+x/(offset_scale+1.0))^{offset_shape/alpha}-1)
-  if(alpha < 0){
-    res <- -res
-  } 
+  res <- sign(alpha)*(beta+kappa)*((1+x/(offset_scale+1.0))^{offset_shape/alpha}-1)
   return(res)
 }
 
@@ -72,14 +67,17 @@ trf_find_offset_scale <- function(alpha, beta, kappa, offset_shape){
   #return(1/extract_inverse_shape - 1.0)
   
   # We conserve entropy
-  val_scale <- offset_shape * abs((beta+kappa)/alpha) * exp(1/alpha - 1/offset_shape)
-  return(val_scale - 1)
+  # val_scale <- offset_shape * abs((beta+kappa)/alpha) * exp(1/alpha - 1/offset_shape)
+  # return(val_scale - 1)
+  #return(kappa/((1+sign(alpha)*kappa/beta)^{alpha/offset_shape}-1))
+  return(1+kappa)
+  #return(1+kappa/beta)
 }
 
 # Example
 kappa <- 1.2
 alpha <- 3
-beta <- 1
+beta <- 15
 rho <- 0.4
 n_moments <- 4
 
@@ -87,9 +85,9 @@ offset_shape <- n_moments + 1
 offset_scale <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
 
 ## Verification trf_inv_g and trf_g are inverse functions of eachother
-plot(1:10, trf_inv_g(trf_g(x = 1:10, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
+plot(1:5, trf_inv_g(trf_g(x = 1:5, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
                      alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), ylab = "id")
-plot(1:10, trf_g(trf_inv_g(z = 1:10, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
+plot(1:5, trf_g(trf_inv_g(z = 1:5, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
                  alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), ylab = "id")
 
 ## Verification of output densities
@@ -471,11 +469,13 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
 }
 
 pl_single_all_params <- function(times, values, delta, params, logscale=T, transformation=F){
+  # TODO add general model parameter names
+  #print(params)
   return(pairwise_likelihood_single_full(times, values, 
-                                         alpha = (params[1]), 
-                                         beta = (params[2]), 
-                                         kappa = exp(params[4]), 
-                                         rho = exp(params[3]), 
+                                         alpha = (params["alpha"][[1]]), 
+                                         beta = (params["beta"][[1]]), 
+                                         kappa = params["kappa"][[1]], 
+                                         rho = params["rho"][[1]], 
                                          delta = delta, 
                                          logscale = T, 
                                          transformation = transformation))
@@ -495,10 +495,19 @@ pl_univ <- function(times, values, delta, fixed_names, fixed_params, params, mod
     params_all[!opti_params] <- fixed_params
   }
   
+  params_list <- list()
+  params_list[fixed_names] <- fixed_params
+  #params_list[opti_params_names] <- params
+  for(i in 1:length(fixed_names)){
+    params_list[fixed_names[i]] <- fixed_params[i]
+  }
+  
+  params_list[opti_params_names] <- params
+  
   return(pl_single_all_params(times = times,
                               values = values,
                               delta = delta,
-                              params = params_all,
+                              params = params_list,
                               logscale = logscale,
                               transformation = transformation))
 }
@@ -562,7 +571,7 @@ mom_gpd <- function(values_array){
     p_mom <- length(values_array[,index][values_array[,index]>0])/n_values
     
     alphas_mom[index] <- 2*var_mom/(var_mom-mean_mom^2)
-    betas_mom[index] <- mean_mom*(alpha_mom-1)
+    betas_mom[index] <- mean_mom*(alphas_mom[index]-1)
     
     kappas_mom[index] <- betas_mom[index] * (1.0 - p_mom^{1/alphas_mom[index]})
     betas_mom[index] <- betas_mom[index] - kappas_mom[index]
