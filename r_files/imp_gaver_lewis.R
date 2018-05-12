@@ -48,12 +48,12 @@ pw_lp2_gl_dx1dx2 <- function(x1, x2, j, alpha, beta, rho){
   return(temp)
 }
 
-pairwise_gl <- function(x1, x2, j, alpha, beta, rho, kappa, tol=1e-16){
+pairwise_gl <- function(x1, x2, i, j, alpha, beta, rho, kappa, tol=1e-16){
   if(x1 < tol & x2 < tol){
     
     temp <- pw_lp2_gl(x1 = kappa,
                       x2 = kappa,
-                      j = j-1,
+                      j = j-i,
                       alpha = alpha,
                       beta = beta,
                       rho = rho)
@@ -63,7 +63,7 @@ pairwise_gl <- function(x1, x2, j, alpha, beta, rho, kappa, tol=1e-16){
       
       return(-pw_lp1_dx(x1+kappa, alpha, beta)+pw_lp2_gl_dx1(x1 = x1+kappa,
                                                        x2 = kappa,
-                                                       j = j-1,
+                                                       j = j-i,
                                                        alpha = alpha,
                                                        beta = beta,
                                                        rho = rho))
@@ -72,7 +72,7 @@ pairwise_gl <- function(x1, x2, j, alpha, beta, rho, kappa, tol=1e-16){
        
         return(-pw_lp1_dx(x2+kappa, alpha, beta)+pw_lp2_gl_dx2(x1 = kappa,
                                                          x2 = x2+kappa,
-                                                         j = j-1,
+                                                         j = j-i,
                                                          alpha = alpha,
                                                          beta = beta,
                                                          rho = rho))
@@ -80,7 +80,7 @@ pairwise_gl <- function(x1, x2, j, alpha, beta, rho, kappa, tol=1e-16){
         # both not zero
         return(pw_lp2_gl_dx1dx2(x1 = x1+kappa,
                              x2 = x2+kappa,
-                             j = j-1,
+                             j = j-i,
                              alpha = alpha,
                              beta = beta,
                              rho = rho))
@@ -104,6 +104,7 @@ pl_gl_full <- function(data, params, delta){
      #cat(data[first_index], data[second_index], "\n")
       temp <- pairwise_gl(x1 = data[first_index],
                           x2 = data[second_index],
+                          i = first_index,
                           j = second_index,
                           alpha = alpha,
                           beta = beta,

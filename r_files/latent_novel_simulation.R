@@ -238,7 +238,7 @@ trawl_slice_sets_not_optim_3 <- function(alpha, beta, times, n, trawl_fs, trawl_
   # Creating the matrix of gamma realisations
   for(main_index in 1:n_times){
     for(second_index in 1:deep_cols){
-      slice_mat[main_index, second_index] <- slice_area(main_index, min(second_index + main_index - 1, n_times), times, trawl_fs_prim[[main_index]])
+      slice_mat[main_index, second_index] <- slice_area(main_index, min(second_index + main_index - 1, n_times), times, trawl_fs_prim[[main_index]]) # TODO fix for last row
       #if(slice_mat[main_index, second_index] > 1e-3){
       #print(alpha * slice_mat[main_index, second_index] / A)
       gamma_sim[main_index, second_index] <- rgamma(shape = alpha * slice_mat[main_index, second_index] / A,
@@ -269,7 +269,7 @@ trawl_slice_sets_not_optim_3 <- function(alpha, beta, times, n, trawl_fs, trawl_
   upper.anti.tri<-function(m) col(m)+row(m) < dim(m)[1]+1
   anti_diag_mat <- matrix(1, deep_cols, deep_cols)
   anti_diag_mat[upper.anti.tri(anti_diag_mat)] <- 0
-  results <- vapply(1:(n_times - deep_cols), 
+  results <- vapply(1:(n_times - 1*deep_cols), 
                     function(i){
                       return(sum(gamma_sim[i:(i - 1 + deep_cols),] * anti_diag_mat))
                     },
@@ -346,13 +346,14 @@ rltrawl <- function(alpha, beta, times, trawl_fs, trawl_fs_prim, n, kappa = 0, t
   return(results)
 }
 
-rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, transformation, n_moments = 4){
+rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, transformation, n_moments = 4, deep_cols=30){
   # TODO n is not implemented yet
   offset_shape <- n_moments+1
   offset_scale <- trf_find_offset_scale(alpha = alpha,
                                        beta = beta,
                                        kappa = kappa,
                                        offset_shape = n_moments+1)
+  #print(offset_scale)
   # Generate Gamma
   gen_trawl <- rltrawl(alpha = alpha,
                        beta = beta,
@@ -363,8 +364,9 @@ rlexceed <- function(alpha, beta, kappa, times, trawl_fs, trawl_fs_prim, n, tran
                        n = n,
                        transformation = transformation,
                        offset_shape = offset_shape,
-                       offset_scale = offset_scale)
-  # return(gen_trawl)
+                       offset_scale = 1)
+  
+  #return(gen_trawl)
   # Uniform threshold
   unif_samples <- runif(n=length(times)-deep_cols)
   if(n == 1){

@@ -188,7 +188,7 @@
           #print(j_hat)
           #print(j_hat)
           #print(params)
-          return(-2*temp + j_hat)
+          return(-1*temp + j_hat)
         
       })
     }

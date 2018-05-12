@@ -50,15 +50,15 @@ is_vector_elem(test_vec, "elem") # Returns True
 is_vector_elem(test_vec, "ele") # Returns False
 
 trf_inv_g <- function(z, alpha, beta, kappa, offset_scale, offset_shape){
-  # From GPD(alpha, beta+kappa) to GPD(offset, offset+1.0)
-  res <- (offset_scale+1.0)*((1+sign(alpha)*z/(beta+kappa))^{alpha/offset_shape}-1)
+  # From GPD(alpha, beta+kappa) to GPD(offset, offset)
+  res <- (offset_scale)*((1+sign(alpha)*z/(beta+kappa))^{alpha/offset_shape}-1)
 
   return(res)
 }
 
 trf_g <- function(x, alpha, beta, kappa, offset_scale, offset_shape){
-  # From GPD(offset, offset+1.0) to GPD(alpha, beta+kappa)
-  res <- sign(alpha)*(beta+kappa)*((1+x/(offset_scale+1.0))^{offset_shape/alpha}-1)
+  # From GPD(offset, offset) to GPD(alpha, beta+kappa)
+  res <- sign(alpha)*(beta+kappa)*((1+x/(offset_scale))^{offset_shape/alpha}-1)
   return(res)
 }
 
@@ -77,46 +77,73 @@ trf_find_offset_scale <- function(alpha, beta, kappa, offset_shape){
 # Example
 kappa <- 1.2
 alpha <- 3
-beta <- 15
+beta <- 3
 rho <- 0.4
 n_moments <- 4
 
 offset_shape <- n_moments + 1
 offset_scale <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
 
+## Verification of output densities
+n_samples <- 2^16
+gpd_data_offset <- gPdtest::rgp(n = n_samples, shape = 1/offset_shape, scale = (offset_scale)/offset_shape)
+gpd_data_ab <- gPdtest::rgp(n_samples, shape = 1/alpha, scale=(beta+kappa)/alpha)
+
 ## Verification trf_inv_g and trf_g are inverse functions of eachother
-plot(1:5, trf_inv_g(trf_g(x = 1:5, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
+plot(1:5, 1:5-trf_inv_g(trf_g(x = 1:5, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
                      alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), ylab = "id")
-plot(1:5, trf_g(trf_inv_g(z = 1:5, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
+plot(1:5, 1:5-trf_g(trf_inv_g(z = 1:5, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
                  alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), ylab = "id")
+
+#### testing the marginal fits
+gPdtest::gpd.fit(gpd_data_ab, method = "amle") # should be 1/3 (1.2+3)/3
+gPdtest::gpd.fit(trf_g(x = gpd_data_offset, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), method ="amle")
+
+
+# Example 2: negative alpha
+kappa <- 1.2
+alpha <- -3
+beta <- 0.5
+rho <- 0.4
+n_moments <- 1
+
+offset_shape <- n_moments + 1
+offset_scale <- trf_find_offset_scale(alpha = alpha, beta = beta, kappa = kappa, offset_shape = offset_shape)
+
+## Verification trf_inv_g and trf_g are inverse functions of eachother
+plot(1:5, 1:5-trf_inv_g(trf_g(x = 1:5, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
+                        alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), ylab = "id")
+plot(1:5, 1:5/5-trf_g(trf_inv_g(z = 1:5/5, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), 
+                    alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), ylab = "id")
+
 
 ## Verification of output densities
 n_samples <- 2^16
-gpd_data_offset <- gPdtest::rgp(n = n_samples, shape = 1/offset_shape, scale = (offset_scale+kappa)/offset_shape)
-gpd_data_ab <- gPdtest::rgp(n_samples, shape = 1/alpha, scale=beta/alpha)
+gpd_data_offset <- gPdtest::rgp(n = n_samples, shape = 1/offset_shape, scale = (offset_scale)/offset_shape)
+gpd_data_ab <- gPdtest::rgp(n_samples, shape = 1/alpha, scale=-(beta+kappa)/alpha)
 
 ### from GPD(offset, offset+kappa) to GPD(alpha, beta)
 hist(trf_g(x = gpd_data_offset, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), freq = F, breaks=80)
 
 plot(density(trf_g(x = gpd_data_offset, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)))
 lines(density(gpd_data_ab), type="l", col="red")
-lines(seq(0,5,length.out = 100), alpha/beta*(1+seq(0,5,length.out = 100)/beta)^{-alpha-1}, lty = 2, col="green")
+lines(seq(0,15,length.out = 100), -alpha/(beta+kappa)*(1-seq(0,15,length.out = 100)/(beta+kappa))^{-alpha-1}, lty = 2, col="green")
 
 #### testing the marginal fits
-gPdtest::gpd.fit(gpd_data_ab, method = "amle")
-gPdtest::gpd.fit(trf_g(x = gpd_data_offset, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), method ="amle")
+gPdtest::gpd.fit(gpd_data_ab, method = "combined") # -1/3 (0.5+1.2)/3
+gPdtest::gpd.fit(trf_g(x = gpd_data_offset, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), method ="combined")
 
 ### from GPD(alpha, beta) to GPD(offset, offset+kappa)
-plot(density(gpd_data_offset), col="red")
-lines(density(trf_inv_g(z = gpd_data_ab, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)))
-lines(seq(0,5,length.out = 100), offset_shape/(offset_scale+kappa)*(1+seq(0,5,length.out = 100)/(offset_scale+kappa))^{-offset_shape-1}, lty = 2, col="green", lwd=2)
+hist(gpd_data_offset[gpd_data_offset < 10], col="red", xlim=c(0,10), breaks=10, probability = T)
+lines(density(trf_inv_g(z = gpd_data_ab[gpd_data_ab < 1], alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)))
+lines(seq(0,5,length.out = 100), offset_shape/(offset_scale)*(1+seq(0,5,length.out = 100)/(offset_scale))^{-offset_shape-1}, lty = 2, col="green", lwd=2)
 
 #### testing the marginal fits
-gPdtest::gpd.fit(gpd_data_offset, method = "amle")
+gPdtest::gpd.fit(gpd_data_offset, method = "amle") # 1/2 
 gPdtest::gpd.fit(trf_inv_g(z = gpd_data_ab, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape), method ="amle")
 
 dlgpd <- function(x, alpha, beta){
-  return(alpha/beta*(1+x/beta)^{-alpha-1.0})
+  return(abs(alpha)/beta*max(0,(1+sign(alpha)*x/beta))^{-alpha-1.0})
 }
 
 plgpd <- function(x, alpha, beta, lower.tail=F){
@@ -130,7 +157,7 @@ plgpd <- function(x, alpha, beta, lower.tail=F){
 trf_jacobian <- function(z, alpha, beta, kappa, offset_scale, offset_shape){
   # TODO check whether it is numerically stable by division of pdfs
   inv_g_z <- trf_inv_g(z = z, alpha = alpha, beta = beta, kappa = kappa, offset_scale = offset_scale, offset_shape = offset_shape)
-  res <- dlgpd(x = z, alpha = alpha, beta = beta+kappa) / dlgpd(x = inv_g_z, alpha = offset_shape, beta = offset_scale + 1.0)
+  res <- dlgpd(x = z, alpha = alpha, beta = beta+kappa) / dlgpd(x = inv_g_z, alpha = offset_shape, beta = offset_scale)
   return(res)
 }
 
@@ -243,8 +270,8 @@ pairwise_10_exp <- function(t1, x1, t2, alpha, beta, kappa, rho, transformation=
   
   
   if(transformation){
-    temp <- pairwise_10_1(t1, new_x, t2, alpha=offset_shape, beta=offset_scale, kappa, rho, trawlA)
-    temp <- temp + pairwise_10_2(t1, new_x, t2, alpha=offset_shape, beta=offset_scale, kappa, rho, trawlA, B1, B2, B3)
+    temp <- pairwise_10_1(t1, new_x, t2, alpha=offset_shape, beta=1, kappa, rho, trawlA)
+    temp <- temp + pairwise_10_2(t1, new_x, t2, alpha=offset_shape, beta=1, kappa, rho, trawlA, B1, B2, B3)
     temp <- temp * jacobian
   }else{
     temp <- pairwise_10_1(t1, new_x, t2, alpha, beta, kappa, rho, trawlA)
@@ -362,8 +389,8 @@ pairwise_11_exp <- function(t1, x1, t2, x2, alpha, beta, kappa, rho, transformat
   B3 <- compute_B3_exp(rho, t1, t2)
   
   if(transformation){
-    temp <- temp * pairwise_11_1(t1, new_x1, t2, new_x2, alpha = offset_shape, beta = offset_scale, kappa, rho, B1, B2, B3)
-    temp <- temp * pairwise_11_2(t1, new_x1, t2, new_x2, alpha = offset_shape, beta = offset_scale, kappa, rho, B1, B2, B3)
+    temp <- temp * pairwise_11_1(t1, new_x1, t2, new_x2, alpha = offset_shape, beta = 1, kappa, rho, B1, B2, B3)
+    temp <- temp * pairwise_11_2(t1, new_x1, t2, new_x2, alpha = offset_shape, beta = 1, kappa, rho, B1, B2, B3)
   }else{
     temp <- temp * pairwise_11_1(t1, new_x1, t2, new_x2, alpha, beta, kappa, rho, B1, B2, B3)
     temp <- temp * pairwise_11_2(t1, new_x1, t2, new_x2, alpha, beta, kappa, rho, B1, B2, B3)
@@ -401,15 +428,15 @@ pairwise_likelihood_single_pair <- function(t1, x1, t2, x2, alpha, beta, kappa, 
   #print(x1)
   if(x1 < 1e-16){
     if(x2 < 1e-16){
-      return(pairwise_00_exp(t1, t2, alpha, beta, kappa, rho))  
+      return(pairwise_00_exp(t1, t2, alpha = 1, beta = 1, kappa, rho))  
     }else{
-      return(pairwise_10_exp(t2, x2, t1, alpha, beta, kappa, rho, transformation))
+      return(pairwise_10_exp(t2, x2, t1, alpha, beta, kappa, rho, transformation, n_moments = 0))
     }
   }else{
     if(x2 < 1e-16){
-      return(pairwise_10_exp(t1, x1, t2, alpha, beta, kappa, rho, transformation))
+      return(pairwise_10_exp(t1, x1, t2, alpha, beta, kappa, rho, transformation, n_moments = 0))
     }else{
-      return(pairwise_11_exp(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation))
+      return(pairwise_11_exp(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation, n_moments = 0))
     }
   }
 }
@@ -435,6 +462,7 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
     m <- 0
     total <- total + length(ind)
     for(j in ind){
+      
       warnon <- pairwise_likelihood_single_pair(times[i], values[i], 
                                                 times[j], values[j],
                                                 alpha = alpha,
@@ -446,6 +474,8 @@ pairwise_likelihood_single_full <- function(times, values, alpha, beta, kappa, r
         if(warnon > 1e-12){
           # log the result
           accepted <- accepted + 1
+          #cat("x1 ",values[i],"x2",values[j],"\n")
+          #print(warnon)
           temp <- temp + log(warnon)
         }else{
           if(warnon >= 0.0){
@@ -546,7 +576,7 @@ marginal_gpd_likelihood <- function(values, fixed_names, fixed_params, params, m
                     },
                   1.0)
   }else{
-    lik <- vapply(values, function(x){return(dlgpd(x = x, alpha = params_all[1], beta = params_all[2]))}, 1.0)
+    lik <- vapply(values, function(x){return(dlgpd(x = x, alpha = params_all[1], beta = (params_all[2]+params_all[3])))}, 1.0)
   }
   
   if(logscale){
@@ -554,6 +584,19 @@ marginal_gpd_likelihood <- function(values, fixed_names, fixed_params, params, m
   }else{
     return(prod(lik))
   }
+}
+
+marginal_simple_lik <- function(values, params){
+  alpha <- params[1]
+  beta_kappa <- params[2]
+  lik <- alpha / beta_kappa * (1+sign(alpha) * values / beta_kappa)^{-alpha-1}
+  return(sum(log(lik)))
+}
+
+gpd_fit <- function(values, initial_guess){
+  fn_to_optim <- function(x){return(-marginal_simple_lik(values = values, params = x))}
+  ff <- optim(fn_to_optim, par = initial_guess, method = "L-BFGS-B", lower = c(0.1,0.1), upper = c(20,20))
+  return(ff$par)
 }
 
 mom_gpd <- function(values_array){
