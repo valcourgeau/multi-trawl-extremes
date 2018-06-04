@@ -219,7 +219,7 @@ summary(test_rho)
 evir::gpd(trf_inv_g(z = latent_1[,i], alpha = alpha_true, beta = beta_true, 
                     kappa = kappa_true, offset_scale = 3+kappa_true, offset_shape = 3), threshold = 0)$par.ests
 
-for(index in 1:n_sims){
+for(index in 443:n_sims){ # TODO change 43
   params_to_work_with <- rep(0, 4)
   fit_marginal <-  fExtremes::gpdFit(latent_1[1:n_timestamps,index][latent_1[1:n_timestamps,index] > 0], u= 0)@fit$fit$par
   p_nz <- length(which(latent_1[1:n_timestamps,index] > 0))/length(latent_1[1:n_timestamps,index])
@@ -257,7 +257,7 @@ for(index in 1:n_sims){
   upper_b[3] <- -0.001
 
   lower_b <- c(-8,
-               2,
+               1,
                0.01,
                1
   )
@@ -272,7 +272,7 @@ for(index in 1:n_sims){
   upper_b
   
   #print(params_to_work_with)
-  res <- optim(fn = fn_to_optim, par = params_to_work_with[c(1,2,3,4)], control = list(trace=4, factr=1e11),
+  res <- optim(fn = fn_to_optim, par = params_to_work_with[c(1,2,3,4)], control = list(trace=1, factr=1.5e11),
                method = "L-BFGS-B", lower = lower_b, upper=upper_b)
   print(index)
   print(params_to_work_with)
@@ -281,6 +281,7 @@ for(index in 1:n_sims){
   #print(mat_res[index,])
 }
 
+#write.table(mat_res, row.names = F, col.names = F, file = "mat_res_minus_4_4_0.2_9_500.csv", sep = ",")
 
 ## CASE 4
 # General parameters
@@ -337,29 +338,29 @@ for(index in 1:n_sims){
   upper_b[3] <- -0.001
 
   lower_b <- c(-10,
-               0.1,
+               0.05,
                0.01,
-               1
+               5
   )
   upper_b <- c(-1,
-               15,
+               5,
                0.6,
-               10
+               25
   )
   
   # params_to_work_with
   # lower_b
   # upper_b
   # 
-  # res <- optim(fn = fn_to_optim, par = params_to_work_with[c(1,2,3,4)], control = list(trace=3, factr=1e12),
-  #              method = "L-BFGS-B", lower = lower_b, upper=upper_b)
-  # print(index)
-  # print(params_to_work_with)
-  # print(res$par)
-  # mat_res[index,] <- res$par
-  #print(mat_res[index,])
+  res <- optim(fn = fn_to_optim, par = params_to_work_with[c(1,2,3,4)], control = list(trace=1, factr=1.5e11),
+               method = "L-BFGS-B", lower = lower_b, upper=upper_b)
+  print(index)
+  print(params_to_work_with)
+  print(res$par)
+  mat_res[index,] <- res$par
 }
 
+#write.table(mat_res, row.names = F, col.names = F, file = "mat_res_minus_4_1_0.1_15_500.csv", sep = ",")
 
 
 #library(DEoptim)
@@ -393,6 +394,51 @@ library(ggplot2)
 contour(x = alpha_s, y = beta_s, z = vis_mat, xlab="Alpha", ylab="Beta", nlevels = 40, zlim=c(0,110000), col = colorRamp(c("red", "green"))(90))
 lines(x=alpha_s/6*6, y =alpha_s/8*exp(alpha_s/8)*6-0.7, col = "red", lwd = 2)
 par(mfrow=c(1,1))
+
+
+
+### TRF Plot
+
+fn_to_optim <- loglikelihood_pl_univ_ic(times = 1:4399,
+                                        values = latent_1[1:4399,index],
+                                        delta = 4,
+                                        lambda = 0.0,
+                                        model_vars_names = univ_model_vars_names,
+                                        fixed_names = c("kappa", "rho"),
+                                        fixed_params = c(9, 0.2),#c(params_to_work_with[c(2,3,4)]),
+                                        logscale = T,
+                                        transformation = T)
+#plot(seq(0.1,2,length.out = 20), vapply(seq(0.1,2,length.out = 20), fn_to_optim, 1))
+n_points_grid <- 30
+alpha_s <- seq(-10,-1,length.out = n_points_grid)
+beta_s <- seq(1,10,length.out = n_points_grid)
+vis_mat <- matrix(0, ncol=n_points_grid, nrow=n_points_grid)
+
+for(index_a in 1:n_points_grid){
+  for(index_b in 1:n_points_grid){
+    vis_mat[index_a,index_b] <- fn_to_optim(c(alpha_s[index_a], beta_s[index_b]))
+  }
+  print(index_a)
+}
+
+par(mfrow=c(1,2))
+library(plot3D)
+persp3D(alpha_s, beta_s, vis_mat, theta = -10, phi = 10, xlab= expression(alpha), ylab="beta", zlab="(minus) log-PL")
+library(ggplot2)
+contour(x = alpha_s, y = beta_s, z = vis_mat, xlab="Alpha", ylab="Beta", nlevels = 50, zlim=c(12000,15000), col = colorRamp(c("red", "green"))(90))
+lines(x=alpha_s/6*6, y = abs(alpha_s*2)*exp(alpha_s/16)*2-10, col = "red", lwd = 2)
+par(mfrow=c(1,1))
+
+
+
+
+
+
+
+
+
+
+
 
 quire(grDevices) # for colours
 x <- -6:16
@@ -464,13 +510,53 @@ for(idex in 1:4){
 par(mfrow=c(1,1), mar=c(5.1,4.1,4.1,2.1))
 
 par(mfrow=c(1,1), mar=c(4.1,4.5,1.1,2.1))
-summary(lm(case_44[,2] ~ case_44[,1]))
-summary(lm(case_91[,2] ~ case_91[,1]))
-plot(case_44[,2]/case_44[,1], xlab="Simulation", ylab=expression(beta/alpha), ylim=c(-0.5,2), pch = 6)
-points(case_91[,2]/case_91[,1], xlab=expression(alpha), ylab=expression(beta), pch = 0)
-abline(h=0.41-0.65/4, col = "blue", lwd = 3, lty = 2)
-abline(h=1.83-3.21/4, col = "darkgreen", lwd = 3, lty = 2)
-legend(420, 2.08, c(paste(expression(alpha), "= 4,", expression(beta), "= 4"), paste(expression(alpha), "= 4,", expression(beta), "= 1")), col = c("black", "black", 6), lty = c(NA, NA, 1), lwd = c(1,1), pch = c(6, 0, 4),
+summary(lm(case_44[,2] + case_44[,4] ~ case_44[,1]))
+summary(lm(case_91[,2] + case_91[,4]~ case_91[,1]))
+plot((case_44[,2]+case_44[,2])/case_44[,1], xlab="Simulation", ylab=expression((beta+kappa)/alpha), ylim=c(-0.5,4), pch = 6)
+points((case_91[,2]+case_91[,4])/case_91[,1], xlab=expression(alpha), ylab=expression(beta), pch = 0)
+abline(h=0.48 - 0.22/2, col = "blue", lwd = 3, lty = 2)
+abline(h=2.12-1.26/8, col = "darkgreen", lwd = 3, lty = 2)
+legend(420, 4.08, c("Case 1", "Case 2"), col = c("black", "black", 6), lty = c(NA, NA, 1), lwd = c(1,1), pch = c(6, 0, 4),
+       merge = TRUE, bg = "gray95")
+par(mfrow=c(1,1), mar=c(5.1,4.1,4.1,2.1))
+
+
+
+## TRF boxplots
+case_44 <- read.table("mat_res_minus_4_4_0.2_9_500.csv", sep = ",")
+case_41 <- read.table("mat_res_minus_4_1_0.1_15_500.csv", sep = ",")
+
+par(mfrow=c(2,4), mar=c(1.02,2.82,2.82,3.42))
+name_d <- c(expression(alpha), expression(beta), expression(rho), expression(kappa))
+true_44 <- c(-4,4,0.2,9)
+true_41 <- c(-4,1,0.1,15)
+for(idex in 1:4){
+  if(idex == 3){
+    boxplot(case_44[,idex], main = (name_d[idex]), ylim= c(0.1,0.4))
+  }else{
+    boxplot(case_44[,idex], main = (name_d[idex]))
+  }
+  abline(h = true_44[idex], col = "red")
+}
+for(idex in 1:4){
+  if(idex == 3){
+    boxplot(case_41[,idex], main = (name_d[idex]), ylim= c(0.01,0.3))
+  }else{
+    boxplot(case_41[,idex], main = (name_d[idex]))
+  }
+  
+  abline(h = true_41[idex], col = "red")
+}
+par(mfrow=c(1,1), mar=c(5.1,4.1,4.1,2.1))
+
+par(mfrow=c(1,1), mar=c(4.1,4.5,1.1,2.1))
+summary(lm(case_44[,2] + case_44[,4] ~ case_44[,1]))
+summary(lm(case_41[,2] + case_41[,4]~ case_41[,1]))
+plot((case_44[,2]+case_44[,4])/case_44[,1], xlab="Simulation", ylab=expression((beta+kappa)/alpha), ylim=c(-5.5,-1.5), pch = 6)
+points((case_41[,2]+case_41[,4])/case_41[,1], xlab=expression(alpha), ylab=expression(beta), pch = 0, lwd=2)
+abline(h=-1.63-4.49/5.8, col = "blue", lwd = 3, lty = 2)
+abline(h=- 2.56 - 3.35/3, col = "darkgreen", lwd = 3, lty = 2)
+legend(440, -1.5, c("Case 3", "Case 4"), col = c("black", "black", 6), lty = c(NA, NA, 1), lwd = c(1,2), pch = c(6, 0, 4),
        merge = TRUE, bg = "gray95")
 par(mfrow=c(1,1), mar=c(5.1,4.1,4.1,2.1))
 
