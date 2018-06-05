@@ -32,6 +32,7 @@ get_estimate_rho <- function(alpha, beta, kappa, index, data){
   d_plus <- d_plus * (log(1+2*kappa/beta)^{1-alpha} + (2*alpha-3)/((alpha-2)*(alpha-1)))
   d_times <- beta * log(1+kappa/beta)/(alpha*(alpha-1)-1)*(alpha*beta/(alpha-2)*log(1+kappa/beta)*(1+2*kappa/beta)^{2-alpha} + alpha/(alpha-2)*zeta(alpha-1,beta,kappa) + zeta(alpha+1,beta,kappa))
 
+  d_times <- 2*beta/((alpha-2)*(alpha-1))*((1+2*kappa/beta)^{2-alpha}*log(1+kappa/beta)+zeta(alpha = alpha-1, beta = beta, kappa = kappa))
   return(var(data) / (index * (d_plus-d_times)))
 }
 
