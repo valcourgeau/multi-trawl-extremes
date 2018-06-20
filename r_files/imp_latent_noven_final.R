@@ -110,6 +110,7 @@
     
     loglikelihood_pl_univ_ic <- function(times, values, delta, model_vars_names, fixed_names, fixed_params, lambda, logscale=T, transformation=F){
       return(function(params){
+        print(params)
         temp <- pl_univ(times = times,
                         values = values,
                         delta = delta,
