@@ -16,7 +16,7 @@ get_t1 <- function(alpha, beta, kappa, rho){
 
 get_estimate_rho <- function(alpha, beta, kappa, index, data){
   if(alpha < 0){
-    data[data>0] <- vapply(data[data>0], function(x){trf_inv_g(x1, alpha = alpha, 
+    data[data>0] <- vapply(data[data>0], function(x){trf_inv_g(x, alpha = alpha, 
                                                            beta = beta, kappa = kappa, 
                                                            offset_scale = 2, 
                                                            offset_shape = 1+kappa)}, FUN.VALUE = 1.0)
@@ -24,7 +24,6 @@ get_estimate_rho <- function(alpha, beta, kappa, index, data){
     beta <- 1
   }
  
-  
   d_plus <- beta^2 / ((alpha-2)*(alpha-1))*(1+2*kappa/beta)^{2-alpha}
   d_plus <- d_plus * (log(1+2*kappa/beta) + (2*alpha-3)/((alpha-2)*(alpha-1)))
   #d_times <- beta * log(1+kappa/beta)/(alpha*(alpha-1)-1)*(alpha*beta/(alpha-2)*log(1+kappa/beta)*(1+2*kappa/beta)^{2-alpha} + alpha/(alpha-2)*zeta(alpha-1,beta,kappa) + zeta(alpha+1,beta,kappa))
@@ -43,8 +42,8 @@ generate_parameters <- function(data, cluster.size){
   params_to_work_with[2] <- abs(fit_marginal[2]*params_to_work_with[1])
   
   params_to_work_with[4] <- abs(params_to_work_with[2]*(p_nz^{-1/params_to_work_with[1]}-1) / (p_nz^{-1/params_to_work_with[1]}))
-  params_to_work_with[2] <- params_to_work_with[2] - params_to_work_with[4]
-  params_to_work_with[4] <- (params_to_work_with[4])
+  params_to_work_with[2] <- abs(params_to_work_with[2] - params_to_work_with[4])
+  #params_to_work_with[4] <- (params_to_work_with[4])
   
   # if(params_to_work_with[1] > 4.5){
   #   al <- params_to_work_with[1]

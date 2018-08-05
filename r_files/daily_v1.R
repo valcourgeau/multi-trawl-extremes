@@ -1,5 +1,4 @@
 setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/data/")
-
 pdbl <- read.csv("daily_bloomsbury_2000_2017.csv")
 
 library(lubridate)
@@ -10,9 +9,9 @@ for(i_agent in 3:(n_vars+2)){
                             I(sin(2*pi*1:length(stlpd$index)/200)),
                             I(cos(2*pi*1:length(stlpd$index)/14)),
                             I(sin(2*pi*1:length(stlpd$index)/14)),
-                            #as.numeric(isWeekend(stlpd$date)==T))
-                            vapply(1:4, FUN = function(i){quarter(stlpd$date) == i}, FUN.VALUE = quarter(as.Date(stlpd$date))))
-                            #vapply(1:12, FUN = function(i){month(as.Date(stlpd$date)) == i}, FUN.VALUE = month(as.Date(stlpd$date))),
+                            as.numeric(isWeekend(stlpd$date)==T),
+                            vapply(1:4, FUN = function(i){quarter(stlpd$date) == i}, FUN.VALUE = quarter(as.Date(stlpd$date))),
+                            vapply(1:12, FUN = function(i){month(as.Date(stlpd$date)) == i}, FUN.VALUE = month(as.Date(stlpd$date))))
                             #vapply(1:7, FUN = function(i){wday(as.Date(stlpd$date)) == i}, FUN.VALUE = wday(as.Date(stlpd$date))))
   
   fit <- lm(stlpd[,i_agent] ~ fitting_matrix)
@@ -26,17 +25,19 @@ for(i_agent in 3:(n_vars+2)){
   stlpd[,i_agent] <- lm(stlpd[,i_agent] ~ fitting_matrix)$residuals
 }
 
+library(forecast)
 par(mfrow=c(3,2))
 for(i_agent in 3:(n_vars+2)){
-  Acf(pdbl[,i_agent], lag.max = 20)
+  Acf(stlpd[,i_agent], lag.max = 20)
   #plot(stlpd[,i_agent], type = "l")
   #(Pacf(stlpd[,i_agent]))
 }
 par(mfrow=c(1,1))
 
-q.s <- rep(0.95, 6) #95% everywhere
+q.s <- rep(0.90, 6) #95% everywhere
 thr_stl <- rep(0, 6)
 
+library(evir)
 par(mfrow=c(3,2))
 for(i_agent in 3:(n_vars+2)){
   meplot(stlpd[,i_agent])
@@ -52,7 +53,7 @@ epd <- apply(as.matrix(stlpd[,-c(1,2)]),
 epd <- t(epd)
 epd <- apply(X = epd, MARGIN = 2, FUN = function(x){return(x/sd(x[x>0]))})
 
-library(forecast)
+
 par(mfrow=c(6,3))
 for(i_agent in 3:(n_vars+2)){
   acf(epd[,i_agent-2], lag.max = 10)
