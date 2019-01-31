@@ -1,5 +1,6 @@
 
 require(hypergeo)
+
 zeta <- function(alpha, beta, kappa){
   res.zeta <- beta^alpha / ((beta+kappa)^{alpha-1})
   res.zeta <- res.zeta * hypergeo(A = alpha-1, B = alpha-1, C = alpha, z = - beta/(beta+kappa))

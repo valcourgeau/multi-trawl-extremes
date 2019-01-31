@@ -364,6 +364,7 @@ for(index in 1:n_sims){
 #write.table(mat_res, row.names = F, col.names = F, file = "mat_res_minus_4_1_0.1_15_500.csv", sep = ",")
 
 
+
 #library(DEoptim)
 #DEoptim::DEoptim(fn_to_optim, lower = lower_b, upper_b, control = DEoptim.control(trace=T, itermax=200))
 
@@ -496,14 +497,14 @@ name_d <- c(expression(alpha), expression(beta), expression(rho), expression(kap
 true_44 <- c(4,4,0.2,3.11)
 true_91 <- c(4,1,0.05,0.75)
 for(idex in 1:4){
-  boxplot(case_44[,idex], main = (name_d[idex]))
+  boxplot(case_44[,idex], main = (name_d[idex]), cex.main=2, cex.axis=1.5)
   abline(h = true_44[idex], col = "red")
 }
 for(idex in 1:4){
   if(idex == 3){
-    boxplot(case_91[,idex]/4, main = (name_d[idex]))
+    boxplot(case_91[,idex]/4, main = (name_d[idex]), cex.main=2, cex.axis=1.5)
   }else{
-    boxplot(case_91[,idex], main = (name_d[idex]))
+    boxplot(case_91[,idex], main = (name_d[idex]), cex.main=2, cex.axis=1.5)
   }
   
   abline(h = true_91[idex], col = "red")
@@ -533,17 +534,17 @@ true_44 <- c(-4,4,0.2,9)
 true_41 <- c(-4,1,0.1,15)
 for(idex in 1:4){
   if(idex == 3){
-    boxplot(case_44[,idex], main = (name_d[idex]), ylim= c(0.1,0.4))
+    boxplot(case_44[,idex], main = (name_d[idex]), ylim= c(0.1,0.4), cex.main=2, cex.axis=1.5)
   }else{
-    boxplot(case_44[,idex], main = (name_d[idex]))
+    boxplot(case_44[,idex], main = (name_d[idex]), cex.main=2, cex.axis=1.5)
   }
   abline(h = true_44[idex], col = "red")
 }
 for(idex in 1:4){
   if(idex == 3){
-    boxplot(case_41[,idex], main = (name_d[idex]), ylim= c(0.01,0.3))
+    boxplot(case_41[,idex], main = (name_d[idex]), ylim= c(0.01,0.3), cex.main=2, cex.axis=1.5)
   }else{
-    boxplot(case_41[,idex], main = (name_d[idex]))
+    boxplot(case_41[,idex], main = (name_d[idex]), cex.main=2, cex.axis=1.5)
   }
   
   abline(h = true_41[idex], col = "red")
@@ -809,3 +810,83 @@ for(index in 1:10){
 
 lw_mom <- mom_gpd(lw_sim)
 acf(lw_sim[,5])
+
+
+
+##### SOLAR UNIV
+latent_1 <- read.csv("latent_univ_solar.csv", header = F, sep = ",")
+n_timestamps <- 5000
+n_sims <- 1000
+library(hypergeo)
+mat_res <- matrix(0, ncol = 4, nrow = 5000)
+
+for(index in 1:n_sims){ # TODO change 43
+  params_to_work_with <- rep(0, 4)
+  fit_marginal <-  fExtremes::gpdFit(latent_1[1:n_timestamps,index][latent_1[1:n_timestamps,index] > 0], u= 0)@fit$fit$par
+  p_nz <- length(which(latent_1[1:n_timestamps,index] > 0))/length(latent_1[1:n_timestamps,index])
+  
+  params_to_work_with <- rep(0, 4)
+  params_to_work_with[1] <- 1/fit_marginal[1]
+  params_to_work_with[2] <- fit_marginal[2]
+  params_to_work_with[4] <- params_to_work_with[2]*(p_nz^{1/params_to_work_with[1]}-1)/ (p_nz^{1/params_to_work_with[1]})
+  params_to_work_with[2] <- params_to_work_with[2] - params_to_work_with[4]
+
+  beta_trf <- params_to_work_with[4]/(p_nz^{-1/4}-1)
+  beta_trf <- 1
+  params_to_work_with[3] <- get_estimate_rho(alpha = 4, beta = beta_trf, kappa = params_to_work_with[4], index = 7, 
+                                             data = trf_inv_g(z = latent_1[,i], alpha = params_to_work_with[1], 
+                                                               beta = params_to_work_with[2],
+                                                               kappa = params_to_work_with[4], 
+                                                               offset_scale = beta_trf+params_to_work_with[4], 
+                                                               offset_shape = 1)
+                                             )
+  #params_to_work_with[3] <- min(params_to_work_with[3], 1.0)
+  if(is.na(params_to_work_with[3])){
+    params_to_work_with[3] <- runif(min = 0.1,0.5, n = 1)
+  }
+  
+  fn_to_optim <- loglikelihood_pl_univ_ic(times = 1:n_timestamps,
+                                          values = latent_1[1:n_timestamps,index],
+                                          delta = 4,
+                                          lambda = 0.0,
+                                          model_vars_names = univ_model_vars_names,
+                                          fixed_names = c(),
+                                          fixed_params = c(),
+                                          logscale = T,
+                                          transformation = T)
+  
+  lower_b <- c(-10,
+               0.1,
+               0.01,
+               0.1)
+  upper_b <- c(-1,
+               10,
+               0.9,
+               20)
+  #print(params_to_work_with)
+  cat("Working on:", index, "\n")
+  cat("Start:", params_to_work_with, "\n")
+  res <- optim(fn = fn_to_optim, par = params_to_work_with[c(1,2,3,4)], control = list(trace=3, factr=5e13),
+               method = "L-BFGS-B", lower = lower_b, upper=upper_b)
+
+  cat("Finish:", res$par, "\n")
+  mat_res[index,] <- res$par
+  if(index %% 50 == 0){
+    write.csv(mat_res, paste("results_latent_solar_", index, ".csv", sep = ""), sep = ",", col.names = F, row.names = F)
+  }
+}
+
+res_boostrap <- read.csv("results_latent_solar_1000.csv", header = T, sep = ",")[1:1000,]
+par(mfrow=c(1,4), mar=c(1.02,2.82,2.82,3.42))
+name_d <- c(expression(alpha), expression(beta), expression(rho), expression(kappa))
+
+alpha <- -5.5549
+beta <- 0.603
+rho <- 0.165
+kappa <- 0.5047
+true_values <- c(alpha, beta, rho, kappa)
+for(idex in 1:4){
+  boxplot(res_boostrap[,idex], main = (name_d[idex]))
+  abline(h = true_values[idex], col = "red")
+}
+

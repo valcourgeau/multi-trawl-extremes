@@ -76,7 +76,7 @@ s.clusters <- c(10, 15, 11, 11, 13, 13)
 val_params <- matrix(0, nrow = length(epd[1,]), ncol = 4)
 par(mfrow=c(3,2), mar=c(5.1,4.1,2.1,2.1))
 for(i_agent in 1:n_vars){
-  #val_params[i_agent,] <- generate_parameters(epd[,i_agent], cluster.size = s.clusters[i_agent])
+  val_params[i_agent,] <- generate_parameters(epd[,i_agent], cluster.size = s.clusters[i_agent])
   evir::qplot(epd[,i_agent][epd[,i_agent] > 0], xi = round(1/val_params[i_agent,1],3), labels = T, main=(colnames(epd)[i_agent]))
   print((1+val_params[i_agent,4]/val_params[i_agent,2])^{-val_params[i_agent,1]})
 }

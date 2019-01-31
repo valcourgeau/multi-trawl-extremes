@@ -428,15 +428,15 @@ pairwise_likelihood_single_pair <- function(t1, x1, t2, x2, alpha, beta, kappa, 
   #print(x1)
   if(x1 < 1e-16){
     if(x2 < 1e-16){
-      return(pairwise_00_exp(t1, t2, alpha = 1, beta = 1, kappa, rho))  
+      return(pairwise_00_exp(t1, t2, alpha = 4, beta = 1, kappa, rho))  
     }else{
-      return(pairwise_10_exp(t2, x2, t1, alpha, beta, kappa, rho, transformation, n_moments = 0))
+      return(pairwise_10_exp(t2, x2, t1, alpha, beta, kappa, rho, transformation, n_moments = 3))
     }
   }else{
     if(x2 < 1e-16){
-      return(pairwise_10_exp(t1, x1, t2, alpha, beta, kappa, rho, transformation, n_moments = 0))
+      return(pairwise_10_exp(t1, x1, t2, alpha, beta, kappa, rho, transformation, n_moments = 3))
     }else{
-      return(pairwise_11_exp(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation, n_moments = 0))
+      return(pairwise_11_exp(t1, x1, t2, x2, alpha, beta, kappa, rho, transformation, n_moments = 3))
     }
   }
 }

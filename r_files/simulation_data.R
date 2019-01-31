@@ -211,3 +211,42 @@ lines(1:1000/10, dgpd(x = 1:1000/10, xi = 1/alpha, beta = (beta+kappa)/abs(alpha
 evir::gpd(exceeds[,1][exceeds[,1]>0], threshold = 0.0)$par.ests
 
 write.table(exceeds, file =  "latent_minus_4_1_15_0.1_500.csv", row.names = F, col.names = F, sep = ",") 
+
+
+## TRF Example UNIV Solar Oklahoma
+n_timesteps <- 5000
+times <- 1:(n_timesteps+30)
+alpha <- -5.5549
+beta <- 0.603
+rho <- 0.165
+kappa <- 0.5047
+n_sims <- 2
+
+### Generating the functions
+trawl_1 <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = F)
+trawl_1_prim <- collection_trawl(times = times, params = list(rho=rho), type = "exp", prim = T)
+
+set.seed(40)
+n_sims <- 1000
+exceeds <- matrix(0, nrow = length(times)-30, ncol = n_sims)
+for(i in 1:n_sims){ # TODO put nsims back in place
+  exceeds[,i] <- rlexceed(alpha = alpha,
+                          beta = beta,
+                          kappa = kappa,
+                          trawl_fs = trawl_1,
+                          trawl_fs_prim = trawl_1_prim,
+                          times = times,
+                          n = 1,
+                          n_moments = 0,
+                          transformation = T)
+  print(i)
+  print(length(which(exceeds[,i] > 0))/n_timesteps)
+}
+
+#trawls
+
+hist(exceeds[,1][exceeds[,1]>0 & exceeds[,1]<200], probability = T)
+lines(1:1000/10, dgpd(x = 1:1000/10, xi = 1/alpha, beta = (beta+kappa)/abs(alpha)))
+evir::gpd(exceeds[,1][exceeds[,1]>0], threshold = 0.0)$par.ests
+
+write.table(exceeds, file =  "latent_univ_solar.csv", row.names = F, col.names = F, sep = ",") 

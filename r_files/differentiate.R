@@ -1,4 +1,3 @@
-
 diff.val <- function(value.p, value.m, epsilon){
   # centered differentiation
   
@@ -124,4 +123,3 @@ f.t <- function(params){
 
 grad.f(f.t, params = c(0.5, 7), epsilon = 1e-6)
 hessian.f(f.t, rep(1,2), epsilon = 1e-6)
-
