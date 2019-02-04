@@ -169,6 +169,7 @@ p.zeroes <- 1-colSums(epd > 0)/colSums(epd >= 0 | epd < 0)
 set.seed(42)
 
 plgpd <- function(x, p.zero, alpha, beta, kappa){
+  print(p.zero)
   if(p.zero < 0 | p.zero > 1) stop("p.zero should be between 0 and 1.")
   if(x == 0)
     return(runif(n = 1, min = 0, max = p.zero))

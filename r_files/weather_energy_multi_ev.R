@@ -51,6 +51,8 @@ deterministicCleaning <- function(dates, data, p.adjust.method="bonferroni"){
   dates <- strptime(energy_weather_merged$datetime, "%Y-%m-%d %H:%M:%S", tz = "GMT")
   fitting_matrix <- cbind(cos(2*pi*1:length(data)/24),
                           sin(2*pi*1:length(data)/24),
+                          cos(2*pi*1:length(data)/(24*365)),
+                          sin(2*pi*1:length(data)/(24*365)),
                           #as.numeric(isWeekend(dates)==T),
                           vapply(1:3, 
                                  FUN = function(i){quarter(dates) == i}, 
@@ -84,20 +86,18 @@ deterministicCleaning <- function(dates, data, p.adjust.method="bonferroni"){
 datasetCleaning <- function(data, dates){
   result <- apply(data, MARGIN = 2, 
                   FUN = function(x){
-                    print(names(x))
                     deterministicCleaning(data = x, dates = dates)
                   }
   )
-  
+  result <- as.data.frame(result)
   colnames(result) <- colnames(data)
   return(result)
 }
 
 test <- datasetCleaning(data = core_energy_data,
                         dates = energy_weather_merged$datetime)
-plot(test)
-rm(test)
-
+plot(test$pressure.Miami, type='l')
+#rm(test)
 
 setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
 source("prep_univariate_latent_trawl_fit.R")
@@ -174,14 +174,29 @@ threshold_data$humidity.Vancouver
 apply(threshold_data, MARGIN = 2, 
       FUN = function(x){length(which(x > 0.0)) / length(x)})
 
+#plot(threshold_data$pressure.Houston)
+#plot(energy_weather_merged$pressure.Boston)
+
 s.clusters <- rep(5, length(test[1,]))
 val.params <- findUnivariateParams(data = threshold_data, clusters_size = s.clusters)
 
-plgpd.row <- function(xs, p.zeroes, params.mat){
+val.params
+
+
+plgpd_unif_at_zero <- function(x, p.zero, alpha, beta, kappa){
+  if(p.zero < 0 | p.zero > 1) stop("p.zero should be between 0 and 1.")
+  if(x == 0)
+    return(runif(n = 1, min = 0, max = p.zero))
+  else{
+    return(p.zero + (1-p.zero)*(1-max(0, (1+sign(alpha)*x/(beta+kappa))^{-alpha})))
+  }
+}
+
+plgpd_unif_at_zero.row <- function(xs, p.zeroes, params.mat){
   # params.mat contains alpha beta rho kappa
   res <- rep(0, length(xs))
   for(i in 1:length(xs)){
-    res[i] <- plgpd(x = xs[i],
+    res[i] <- plgpd_unif_at_zero(x = xs[i],
                     p.zero = p.zeroes[i],
                     alpha = params.mat[i,1],
                     beta = params.mat[i,2],
@@ -191,50 +206,68 @@ plgpd.row <- function(xs, p.zeroes, params.mat){
   return(res)
 }
 
+computePZero <- function(params){
+  # Computes probability of having zero given univariate extreme value model
+  return(1-(1+params[,4]/params[,2])^{-abs(params[,1])})
+}
+
 makeConditionalMatrices <- function(data, exceedeances, q.s, 
-                                    horizon, save=T, params, 
+                                    horizon, save=T, params, n_samples = length(data[,1]),
                                     name="conditional-matrices"){
   
-  p.zeroes <- 1-(1+params[,4]/params[,2])^{-params[,1]}
-  epd_cdf <- apply(X = exceedeances, MARGIN = 1, 
-                   FUN = function(x){
-                     return(plgpd.row(xs = x, p.zeroes = p.zeroes, params.mat = params))
-                     }
-                   )
-  epd_cdf <- t(epd_cdf)
-  
-  exceedeances_cdf_ecdf <- epd_cdf
-  for(i in 1:length(epd[1,])){
-    exceedeances_cdf_ecdf[which(epd[,i]==0), i] <- ecdf(data[which(epd[,i]==0), i])(data[which(epd[,i]==0), i]) * p.zeroes[i]
+  p.zeroes <- computePZero(params)
+  # epd_cdf <- apply(X = exceedeances, MARGIN = 1, 
+  #                  FUN = function(x){
+  #                    return(plgpd.row(xs = x, p.zeroes = p.zeroes, params.mat = params))
+  #                    }
+  #                  )
+  # epd_cdf <- t(epd_cdf)
+
+  exceedeances_cdf_ecdf <- exceedeances
+  for(i in 1:length(exceedeances[1,])){
+    # This creates ordered uniform samples in the same order 
+    # as in data.
+    exceedeances_cdf_ecdf[which(exceedeances[,i]==0), i] <- 
+      ecdf(data[which(exceedeances[,i]==0), i])(data[which(exceedeances[,i]==0), i]) * p.zeroes[i]
   }
-  
-  
+
   list_of_list_horizons <- list()
   n_vars <- length(data[1,])
   for(h in horizon){
     list_of_matrices_conditional <- list()
+    # creates a square matrix with all the vars in
     quantile.update.values <- matrix(0, 
                                      nrow = length(exceedeances[1,]), 
                                      ncol = length(exceedeances[1,]))
+    colnames(quantile.update.values) <- colnames(exceedeances)
+    rownames(quantile.update.values) <- colnames(exceedeances)
+    
     for(i in 1:n_vars){
+      # creates a temporary matrix with cols equal to number of nvars + 1
+      # and rows such that the i-th component is an extreme
       mat_temp <- matrix(0,
                          nrow = length(which(exceedeances[1:(s.sample-h), i] > 0)),
                          ncol = n_vars+1)
+      # filtering the i-th eCDF column with extremes 
       temp <- exceedeances_cdf_ecdf[which(exceedeances[1:(s.sample-h), i] > 0), i]
+      # addting those values in the nvars + 1 column
       mat_temp[,n_vars+1] <- ecdf(temp)(temp)
       
       for(j in 1:n_vars){
-        data_j <- epd_cdf_ecdf[which(exceedeances[1:(s.sample-h), i] > 0)+h, j]
+        # filtering data of j-th vars when i-th is extreme h timesteps before
+        data_j <- exceedeances_cdf_ecdf[which(exceedeances[1:(s.sample-h), i] > 0)+h, j]
+        # computing the probability that j-th was an extreme as well 
+        # h timesteps after i-th was an extreme
         quantile.update.values[i, j] <- mean(data_j <= q.s[j])
         data_j <- ecdf(data_j)(data_j)
+        # saving the unif values of j-th var used here.
         mat_temp[,j] <- data_j 
       }
       
       colnames(mat_temp) <- c(colnames(exceedeances), colnames(exceedeances)[i])
       list_of_matrices_conditional[[i]] <- mat_temp
     }
-    colnames(quantile.update.values) <- colnames(exceedeances)
-    rownames(quantile.update.values) <- colnames(exceedeances)
+
     
     list_of_list_horizons[[h]] <- list(unif.values=list_of_matrices_conditional,
                                        quantiles.values=quantile.update.values)
@@ -252,11 +285,15 @@ makeConditionalMatrices <- function(data, exceedeances, q.s,
 
 horizon <- c(1,2,3,6,12,24)
 s.sample <- 40000
-makeConditionalMatrices(data = test,
-                        exceedeances = threshold_data,
-                        q.s=getThresholds(test, 0.8),
-                        horizon = horizon,
-                        params = val.params,
-                        name = "conditional-mat-test")
+cont_mat <- makeConditionalMatrices(data = test[,100:118],
+                                    exceedeances = threshold_data[,100:118],
+                                    q.s=getThresholds(test, 0.95)[100:118],
+                                    horizon = horizon,
+                                    params = val.params[100:118,],
+                                    n_samples = s.sample,
+                                    name = "conditional-mat-test")
 
 
+cont_mat %>% print
+names(cont_mat)
+cont_mat[[1]]$quantiles.values
