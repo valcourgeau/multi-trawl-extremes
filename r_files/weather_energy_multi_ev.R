@@ -43,7 +43,7 @@ s.sample <- 40000
 val.params <- findUnivariateParams(data = core_energy_data[,100:102], clusters_size = c(5,5,5))
 
 cont_mat <- makeConditionalMatrices(data = core_energy_data[,100:102],
-                                    q.s=getThresholds(core_energy_data, 0.95)[100:102],
+                                    p.zeroes = 0.95,
                                     horizon = horizon,
                                     params = val.params,
                                     n_samples = s.sample,

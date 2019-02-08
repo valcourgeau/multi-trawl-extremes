@@ -110,7 +110,16 @@ findUnivariateParams <- function(data, clusters_size){
   return(val_params)
 }
 
-#' @examples getThresholds(core_energy_data[,1:3], c(0.1,0.5,0.8))
+#' This function returns the threshold(s) corresponding the quantile of probability p.exceed
+#' @param data cleaned dataset
+#' @param p.exceed threshold in probability to be considered an extreme (ex: 0.95)
+#' @examples
+#' d <- 3 
+#' n <- 100
+#' data <- matrix(runif(n*d), ncol=d)
+#' getThresholds(data, rep(0.9, d))
+#' getThresholds(data, 0.9)
+#' getThresholds(data[,1], 0.9)
 getThresholds <- function(data, p.exceed){
   if(any(p.exceed < 0) | any(p.exceed > 1)){
     stop('p.exceed should be between 0 and 1.')
@@ -118,28 +127,60 @@ getThresholds <- function(data, p.exceed){
   
   # deals with data as a vector
   if(is.vector(data)){
-    return(quantile(data, p.exceed[1]))
+    return(as.numeric(quantile(data, p.exceed[1])))
   }
   
   if(length(p.exceed) == 1){
-    return(sapply(data, function(x){quantile(x, p.exceed)}))
+    return(apply(data, MARGIN = 2, 
+                 FUN = function(x){
+                   as.numeric(quantile(x, p.exceed))
+                   }))
   }else{
     if(length(data[1,]) == length(p.exceed)){
-      return(sapply(1:length(data[1,]), function(x){quantile(data[,x], p.exceed[x])}))
+      return(sapply(1:length(data[1,]), 
+                    function(i){as.numeric(quantile(data[,i], p.exceed[i]))
+                      }))
     }else{
       stop('p.exceed should either be a scalar or as wide as data.')
     }
   }
 }
+
 getThresholds(core_energy_data[,1:3], c(0.1,0.5,0.8))
 
 
-makeThresholdsMatrix <- function(data, thresholds){
+#' This function replicates the vector to the length of data 
+#' by vertically stacking it.
+#' @param data cleaned dataset
+#' @param vector_to_rep vector that will be replicated
+#' @examples 
+#' data <- matrix(runif(9), ncol=3)
+#' vector_to_rep <- c(1,2,3)
+#' makeMatrix(data = data, vector_to_rep = vector_to_rep)
+makeMatrix <- function(data, vector_to_rep){
   n <- length(data[,1])
-  rep_thres <- t(matrix(rep(thresholds, n), ncol=n))
+  rep_thres <- t(matrix(rep(vector_to_rep, n), ncol=n))
   
   return(rep_thres)
 }
+
+#' Wrapper to makeMatrix in the special case of extreme value thresholds.
+#' We consider p.exceed as the threshold cut-off probability.
+#' @param data cleaned dataset
+#' @param p.exceed Threshold probability for extreme values (if higher, 
+#'                 it is an extreme) 
+#' @examples 
+#' d <- 3
+#' n <- 100
+#' data <- matrix(runif(n*d), ncol=d)
+#' p.exc <- 0.9
+#' makeThresholdsMatrix(data = data, p.exceed = p.exc)
+makeThresholdsMatrix <- function(data, p.exceed){
+  return(makeMatrix(data = data, 
+                    vector_to_rep = getThresholds(data, p.exceed = p.exceed)))
+}
+
+
 
 #' @param data clean dataset;
 #' @param thresholds d dimensional vector of threshold values;
@@ -147,6 +188,7 @@ makeThresholdsMatrix <- function(data, thresholds){
 #' @examples
 #' threshold_data <- makeExceedances(test, thresholds = getThresholds(test, 0.8))
 makeExceedances <- function(data, thresholds, normalize=TRUE){
+  # TODO change thresholds to p.exceed?
   if(!is.vector(thresholds)){
     stop('Thresholds should be a vector of extreme threshold value.')
   }
@@ -155,7 +197,7 @@ makeExceedances <- function(data, thresholds, normalize=TRUE){
       stop('thresholds and data have non-comforting width. 
          Tip: Use getThresholds to get the right size.')
     }
-    rep_thres <- makeThresholdsMatrix(data = data, thresholds = thresholds)
+    rep_thres <- makeMatrix(data = data, vector_to_rep = thresholds) # TODO change to make makeThresholdsMatrix
     epd <- (data - rep_thres) * (data > rep_thres)
   }else{
     epd <- (data - thresholds) * (data > thresholds)
@@ -202,20 +244,17 @@ computePZero <- function(params){
 }
 
 #' @param data clean dataset
-#' @param q
-makeConditionalMatrices <- function(data, q.s, 
-                                    horizon, save=T, params, n_samples = length(data[,1]),
+#' @param p.zeroes threshold in probability to be considered an extreme (ex: 0.95)
+#' @param horizons sequence of selected extreme horizons
+#' @param params model params for each column separately (indep).
+#' @param save Logical. Whether we save the conditonal matrices.
+makeConditionalMatrices <- function(data, p.zeroes,
+                                    horizons, params, n_samples = length(data[,1]), save=T, 
                                     name="conditional-matrices"){
   
-  p.zeroes <- computePZero(params)
+  #p.zeroes <- computePZero(params)
   thres <- getThresholds(data = data, p.exceed = p.zeroes)
-  exceedeances <- makeExceedances(data = data, thresholds = q.s, normalize = T)
-  # epd_cdf <- apply(X = exceedeances, MARGIN = 1, 
-  #                  FUN = function(x){
-  #                    return(plgpd.row(xs = x, p.zeroes = p.zeroes, params.mat = params))
-  #                    }
-  #                  )
-  # epd_cdf <- t(epd_cdf)
+  exceedeances <- makeExceedances(data = data, thresholds = thres, normalize = T)
   
   exceedeances_cdf_ecdf <- exceedeances
   for(i in 1:length(exceedeances[1,])){
@@ -227,7 +266,7 @@ makeConditionalMatrices <- function(data, q.s,
   
   list_of_list_horizons <- list()
   n_vars <- length(data[1,])
-  for(h in horizon){
+  for(h in horizons){
     list_of_matrices_conditional <- list()
     # creates a square matrix with all the vars in
     quantile.update.values <- matrix(0, 
@@ -252,7 +291,7 @@ makeConditionalMatrices <- function(data, q.s,
         data_j <- exceedeances_cdf_ecdf[which(exceedeances[1:(n_samples-h), i] > 0)+h, j]
         # computing the probability that j-th was an extreme as well 
         # h timesteps after i-th was an extreme
-        quantile.update.values[i, j] <- mean(data_j <= q.s[j])
+        quantile.update.values[i, j] <- mean(data_j <= thres[j])
         data_j <- ecdf(data_j)(data_j)
         # saving the unif values of j-th var used here.
         mat_temp[,j] <- data_j 
@@ -262,8 +301,10 @@ makeConditionalMatrices <- function(data, q.s,
       list_of_matrices_conditional[[i]] <- mat_temp
     }
     
-    list_of_list_horizons[[h]] <- list(unif.values=list_of_matrices_conditional,
-                                       quantiles.values=quantile.update.values)
+    list_of_list_horizons[[h]] <- list(
+        unif.values = list_of_matrices_conditional,
+        quantiles.values = quantile.update.values
+      )
   }
   
   if(save){
