@@ -110,10 +110,11 @@ findUnivariateParams <- function(data, clusters_size){
   return(val_params)
 }
 
-
+#' @examples getThresholds(core_energy_data[,1:3], c(0.1,0.5,0.8))
 getThresholds <- function(data, p.exceed){
-  if(p.exceed < 0 | p.exceed > 1)
+  if(any(p.exceed < 0) | any(p.exceed > 1)){
     stop('p.exceed should be between 0 and 1.')
+  }
   
   # deals with data as a vector
   if(is.vector(data)){
@@ -123,25 +124,38 @@ getThresholds <- function(data, p.exceed){
   if(length(p.exceed) == 1){
     return(sapply(data, function(x){quantile(x, p.exceed)}))
   }else{
-    if(length(data[1,]) != p.exceed){
-      return(sapply(data, function(x){quantile(x, p.exceed)}))
+    if(length(data[1,]) == length(p.exceed)){
+      return(sapply(1:length(data[1,]), function(x){quantile(data[,x], p.exceed[x])}))
     }else{
       stop('p.exceed should either be a scalar or as wide as data.')
     }
   }
 }
+getThresholds(core_energy_data[,1:3], c(0.1,0.5,0.8))
 
+
+makeThresholdsMatrix <- function(data, thresholds){
+  n <- length(data[,1])
+  rep_thres <- t(matrix(rep(thresholds, n), ncol=n))
+  
+  return(rep_thres)
+}
+
+#' @param data clean dataset;
+#' @param thresholds d dimensional vector of threshold values;
+#' @param normalize Logical. Normalise extremes to have sd = 1;
 #' @examples
 #' threshold_data <- makeExceedances(test, thresholds = getThresholds(test, 0.8))
 makeExceedances <- function(data, thresholds, normalize=TRUE){
-  if(length(data[1,]) != length(thresholds)){
-    stop('thresholds and data have non-comforting sizes. 
-         Tip: Use getThresholds to get the right size.')
+  if(!is.vector(thresholds)){
+    stop('Thresholds should be a vector of extreme threshold value.')
   }
-  
   if(!is.vector(data)){
-    n <- length(data[,1])
-    rep_thres <- t(matrix(rep(thresholds, n), ncol=n))
+    if(length(data[1,]) != length(thresholds)){
+      stop('thresholds and data have non-comforting width. 
+         Tip: Use getThresholds to get the right size.')
+    }
+    rep_thres <- makeThresholdsMatrix(data = data, thresholds = thresholds)
     epd <- (data - rep_thres) * (data > rep_thres)
   }else{
     epd <- (data - thresholds) * (data > thresholds)
@@ -187,11 +201,15 @@ computePZero <- function(params){
   return(1-(1+params[,4]/params[,2])^{-abs(params[,1])})
 }
 
-makeConditionalMatrices <- function(data, exceedeances, q.s, 
+#' @param data clean dataset
+#' @param q
+makeConditionalMatrices <- function(data, q.s, 
                                     horizon, save=T, params, n_samples = length(data[,1]),
                                     name="conditional-matrices"){
   
   p.zeroes <- computePZero(params)
+  thres <- getThresholds(data = data, p.exceed = p.zeroes)
+  exceedeances <- makeExceedances(data = data, thresholds = q.s, normalize = T)
   # epd_cdf <- apply(X = exceedeances, MARGIN = 1, 
   #                  FUN = function(x){
   #                    return(plgpd.row(xs = x, p.zeroes = p.zeroes, params.mat = params))
@@ -222,16 +240,16 @@ makeConditionalMatrices <- function(data, exceedeances, q.s,
       # creates a temporary matrix with cols equal to number of nvars + 1
       # and rows such that the i-th component is an extreme
       mat_temp <- matrix(0,
-                         nrow = length(which(exceedeances[1:(s.sample-h), i] > 0)),
+                         nrow = length(which(exceedeances[1:(n_samples-h), i] > 0)),
                          ncol = n_vars+1)
       # filtering the i-th eCDF column with extremes 
-      temp <- exceedeances_cdf_ecdf[which(exceedeances[1:(s.sample-h), i] > 0), i]
+      temp <- exceedeances_cdf_ecdf[which(exceedeances[1:(n_samples-h), i] > 0), i]
       # addting those values in the nvars + 1 column
       mat_temp[,n_vars+1] <- ecdf(temp)(temp)
       
       for(j in 1:n_vars){
         # filtering data of j-th vars when i-th is extreme h timesteps before
-        data_j <- exceedeances_cdf_ecdf[which(exceedeances[1:(s.sample-h), i] > 0)+h, j]
+        data_j <- exceedeances_cdf_ecdf[which(exceedeances[1:(n_samples-h), i] > 0)+h, j]
         # computing the probability that j-th was an extreme as well 
         # h timesteps after i-th was an extreme
         quantile.update.values[i, j] <- mean(data_j <= q.s[j])
@@ -257,3 +275,31 @@ makeConditionalMatrices <- function(data, exceedeances, q.s,
   }
   return(list_of_list_horizons)
 }
+
+#' @examples fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
+fitExceedancesVines <- function(exceedances, list_of_matrix){
+  #list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
+  list_of_list_horizons <- list_of_matrix
+  list_of_list_horizons_vines <- list()
+  
+  n_vars <- length(exceedances[1,])
+  
+  for(h in horizon){
+    list_of_vines_mat <- list()
+    cat("Horizon: ", h, "\n")
+    for(i in 1:n_vars){
+      cat("--->", colnames(exceedances)[i], " ")
+      list_of_vines_mat[[i]] <- RVineStructureSelect(
+        data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3,4), type = 0,
+        selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
+        trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
+        se = FALSE, rotations = TRUE, method = "mle", cores = 7)
+      cat("DONE in", "TIME", " \n")
+    }
+    list_of_list_horizons_vines[[h]] <- list_of_vines_mat
+  }
+  
+  list.save(list_of_list_horizons_vines, file = "cond-mat-vines-12361224-v2.RData")
+  return(list_of_list_horizons_vines)
+}
+

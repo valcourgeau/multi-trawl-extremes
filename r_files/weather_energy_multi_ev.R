@@ -5,6 +5,7 @@ require(lubridate)
 require(magrittr)
 require(rlist)
 
+setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
 source("multi_ev.R")
 
 # loading data
@@ -12,14 +13,14 @@ merged_dataset_folder <- "C:/Users/Valentin/Documents/GitHub/multi-trawl-extreme
 setwd(merged_dataset_folder)
 load("energy-weather-merge.Rda")
 
-ok <- ignoreColStartingWith(data = energy_weather_merged, tags = c("humidity",
-                                                                   "wind_direction"))
-dim(ok)
+# ok <- ignoreColStartingWith(data = energy_weather_merged, tags = c("humidity",
+#                                                                    "wind_direction"))
+# dim(ok)
 colnames(energy_weather_merged)
 
 cols_to_ignore <- c("datetime", "index.x", "index.y")
 types_to_ignore <- c("factor")
-tags_to_ignore <- c("humidity",
+tags_to_ignore <- c(
          "wind_direction")
 
 core_energy_data <- getCoreData(data = energy_weather_merged, 
@@ -27,86 +28,24 @@ core_energy_data <- getCoreData(data = energy_weather_merged,
                     ignore_cols = cols_to_ignore,
                     ignore_data_type = types_to_ignore)
 
-dim(test)
+dim(energy_weather_merged)
+dim(core_energy_data)
 
 # dates is a vector of datetime
 # data is a vector of data 
-
-deterministicCleaning <- function(dates, data, p.adjust.method="bonferroni"){
-  dates <- strptime(energy_weather_merged$datetime, "%Y-%m-%d %H:%M:%S", tz = "GMT")
-  fitting_matrix <- cbind(cos(2*pi*1:length(data)/24),
-                          sin(2*pi*1:length(data)/24),
-                          cos(2*pi*1:length(data)/(24*365)),
-                          sin(2*pi*1:length(data)/(24*365)),
-                          #as.numeric(isWeekend(dates)==T),
-                          vapply(1:3, 
-                                 FUN = function(i){quarter(dates) == i}, 
-                                 FUN.VALUE = quarter(dates)),
-                          vapply(1:12, 
-                                 FUN = function(i){month(dates) == i}, 
-                                 FUN.VALUE = month(dates)),
-                          vapply(1:6, 
-                                 FUN = function(i){wday(dates) == i}, 
-                                 FUN.VALUE = wday(dates)),
-                          vapply(1:23, 
-                                 FUN = function(i){hour(dates) == i}, 
-                                 FUN.VALUE = hour(dates)))
-  fit <- lm(data ~ fitting_matrix)
-  
-  # adjusting the method to take in account multiple p.values testing
-  p.v.adjusted <- summary(fit)$coefficients[,4]
-  p.v.adjusted <- p.adjust(p.v.adjusted, method = p.adjust.method)
-  # TODO test that!
-  # print(p.v.adjusted)
-  
-  fitting_indices <- which(p.v.adjusted < 0.05)
-  print(length(fitting_indices))
-  if(1 %in% fitting_indices){
-    fitting_indices <- fitting_indices[-1]
-  }
-  fitting_matrix <- fitting_matrix[,fitting_indices-1]
-  return(lm(data ~ fitting_matrix)$residuals)
-}
-
-datasetCleaning <- function(data, dates){
-  result <- apply(data, MARGIN = 2, 
-                  FUN = function(x){
-                    deterministicCleaning(data = x, dates = dates)
-                  }
-  )
-  result <- as.data.frame(result)
-  colnames(result) <- colnames(data)
-  return(result)
-}
-
-test <- datasetCleaning(data = core_energy_data,
-                        dates = energy_weather_merged$datetime)
-plot(test$pressure.Miami, type='l')
-#rm(test)
 
 setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
 source("prep_univariate_latent_trawl_fit.R")
 library("evir")
 
-
-threshold_data <- makeExceedances(test, thresholds = getThresholds(test, 0.8))
-apply(threshold_data, MARGIN = 2, 
-      FUN = function(x){length(which(x > 0.0)) / length(x)})
-
-s.clusters <- rep(5, length(test[1,]))
-val.params <- findUnivariateParams(data = threshold_data, clusters_size = s.clusters)
-
-val.params
-
-
-
 horizon <- c(1,2,3,6,12,24)
 s.sample <- 40000
-cont_mat <- makeConditionalMatrices(data = test[,100:102],
-                                    exceedeances = threshold_data[,100:102],
-                                    q.s=getThresholds(test, 0.95)[100:102],
+val.params <- findUnivariateParams(data = core_energy_data[,100:102], clusters_size = c(5,5,5))
+
+cont_mat <- makeConditionalMatrices(data = core_energy_data[,100:102],
+                                    q.s=getThresholds(core_energy_data, 0.95)[100:102],
                                     horizon = horizon,
-                                    params = val.params[100:102,],
+                                    params = val.params,
                                     n_samples = s.sample,
                                     name = "conditional-mat-test")
 
@@ -131,38 +70,10 @@ list_of_list_horizons_vines <- list()
 
 n_vars <- length(threshold_data[1,100:102])
 
-fitExceedancesVines <- function(exceedances, list_of_matrix){
-  #list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
-  list_of_list_horizons <- list_of_matrix
-  list_of_list_horizons_vines <- list()
-  
-  n_vars <- length(exceedances[1,])
-  
-  for(h in horizon){
-    list_of_vines_mat <- list()
-    cat("Horizon: ", h, "\n")
-    for(i in 1:n_vars){
-      cat("--->", colnames(exceedances)[i], " ")
-      list_of_vines_mat[[i]] <- RVineStructureSelect(
-        data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3,4), type = 0,
-        selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
-        trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
-        se = FALSE, rotations = TRUE, method = "mle", cores = 7)
-      cat("DONE in", "TIME", " \n")
-    }
-    list_of_list_horizons_vines[[h]] <- list_of_vines_mat
-  }
-  
-  list.save(list_of_list_horizons_vines, file = "cond-mat-vines-12361224-v2.RData")
-  return(list_of_list_horizons_vines)
-}
-
-fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
-
 list_of_list_horizons_vines_loaded <- list.load("cond-mat-vines-12361224-v2.RData")
 list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
 
-computeTRONwithLists <- function(exceedances, list_vines, list_of_matrix){
+computeTRONwithLists <- function(exceedances, list_vines, list_of_matrix, N=100000){
   tron_probabilities <- list()
   set.seed(42)
   for(h in horizon){
@@ -173,7 +84,7 @@ computeTRONwithLists <- function(exceedances, list_vines, list_of_matrix){
     cat(paste("Horizon", h, "\n"))
     for(i in 1:n_vars){
       cat(paste("--> extreme in", colnames(tron_proba_matrix)[i]), "...")
-      te.st <- RVineSim(RVM = list_vines[[h]][[i]], N = 100000)
+      te.st <- RVineSim(RVM = list_vines[[h]][[i]], N = N)
       te.st <- te.st[,1:(length(te.st[1,])-1)]
       qq.values <- list_of_matrix[[h]]$quantiles.values[i,]
       qq.values <- c(qq.values)
@@ -191,39 +102,100 @@ computeTRONwithLists <- function(exceedances, list_vines, list_of_matrix){
   return(tron_probabilities)
 }
 
-tron_temp <- computeTRONwithLists(exceedances = threshold_data[,100:102],
+indices_fit <- 37:72
+list_of_list_horizons <- makeConditionalMatrices(data = test[,indices_fit],
+                                    exceedeances = threshold_data[,indices_fit],
+                                    q.s=getThresholds(test, 0.95)[indices_fit],
+                                    horizon = horizon,
+                                    params = val.params[indices_fit,],
+                                    n_samples = s.sample,
+                                    name = "conditional-mat-test")
+list_vines <- fitExceedancesVines(threshold_data[,indices_fit], list_of_list_horizons)
+tron_temp <- computeTRONwithLists(exceedances = threshold_data[,indices_fit],
                                    list_vines = list_of_list_horizons_vines_loaded,
                                    list_of_matrix = list_of_list_horizons)
+plot(threshold_data[1:1000,40], type = 'l')
+
+
+tron_temp[[24]]$mean
 
 tron_temp[[12]]
 
-computeTRON <- function(data, exceedances, q.s, horizon, params, n_samples, name){
+makeRdmTimestamp <- function(){
+  striped_time <- strptime(Sys.time(), 
+                           format =  "%Y-%m-%d %H:%M:%S")
+  elapsed <- as.integer(proc.time()[3])
+  pasting <- sapply(X = c(year, month, day, hour, minute, second),
+               FUN = function(x){x(striped_time)})
+  pasting <- paste(pasting, collapse = "-")
+  return(pasting %>% as.character)
+}
+
+makeRdmTimestamp()
+
+makeFileName <- function(file_name, tag, extension){
+  if(file_name %>% is.na){
+    return(paste(makeRdmTimestamp(), "_matrix", ".RData", sep=""))
+  }else{
+    return(paste(file_name, ".RData", sep=""))
+  }
+}
+
+makeFileName("ok", "_matrix", "RData")
+
+#' computeTRON allows to compute TRON probabilities very easily!
+computeTRON <- function(data, q.s, horizons, clusters, n_samples,
+                        name_matrices_file=NA, name_vine_file=NA, name_tron_file=NA){
+  name_matrices_file <- makeFileName(name_matrices_file, 
+                                     tag = "_matrix",
+                                     extension = ".RData")
+  name_vine_file <- makeFileName(name_vine_file, 
+                                     tag = "_vines",
+                                     extension = ".RData")
+  name_tron_file <- makeFileName(name_tron_file, 
+                                     tag = "_tron",
+                                     extension = ".RData")
+
+  thresholds <- getThresholds(data = data, 
+                              p.exceed = q.s)
+  
+  univ.params <- findUnivariateParams(data = data, 
+                                      clusters_size = clusters)
+  exceedances <- makeExceedances(data = data,
+                                 thresholds = thresholds,
+                                 normalize = TRUE)
+  # compute the matrices
   list_of_mat <- makeConditionalMatrices(data = data,
                                       exceedeances = exceedances,
-                                      q.s=q.s,
-                                      horizon = horizon,
-                                      params = params,
+                                      q.s = q.s,
+                                      horizon = horizons,
+                                      params = univ.params,
                                       n_samples = n_samples,
-                                      name = name)
-  # list_of_mat <- list.load("conditional-mat-test.Rdata")
+                                      name = name,
+                                      save = F)
+  list_of_mat <- rlist::list.save(list_of_mat, name_matrices_file) # save
+  
+  # compute the vines
   list_vines <- fitExceedancesVines(exceedances = exceedances,
                                     list_of_matrix = list_of_mat)
-  # list_vines <- list.load("cond-mat-vines-12361224-v2.RData")
+  list_vines <- rlist::list.save(list_vines, name_vine_file) #save
+  
+  # compute TRON
   tron <- computeTRONwithLists(exceedances = exceedances, 
                                list_vines = list_vines,
                                list_of_matrix = list_of_mat)
+  rlist::list.save(tron, name_tron_file) # save
+  
   return(tron)
 }
 
+computeTRON(data = core_energy_data[,100:105],
+            q.s = rep(0.95, 6),
+            horizons = c(1,2,3),
+            clusters = rep(5, 5),
+            n_samples = 10000)
 
-max_n_vars <- 110
-res <- computeTRON(data = test[,100:max_n_vars],
-                    exceedances = threshold_data[,100:max_n_vars],
-                      q.s=getThresholds(test, 0.95)[100:max_n_vars],
-                      horizon = horizon,
-                      params = val.params[100:max_n_vars,],
-                      n_samples = s.sample,
-                      name = "conditional-mat-test")
+
 
 
 
