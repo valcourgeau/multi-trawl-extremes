@@ -97,18 +97,33 @@ datasetCleaning <- function(data, dates){
 
 findUnivariateParams <- function(data, clusters_size){
   n_vars <- length(data[1,])
+  
+  if(any(clusters_size <= 0)){
+    stop('clusters_size should have positive entries.')
+  }
+  
+  if(length(clusters_size) == 1){
+    clusters_size <- rep(clusters_size, n_vars)
+  }else{
+    if(n_vars != length(clusters_size)){
+      stop('clusters_size should be either a scalar to apply to every column or as large as data.')
+    }
+  }
+  
   val_params <- matrix(0, nrow = n_vars, ncol = 4)
   for(i_agent in 1:n_vars){
     print(i_agent)
-    tryCatch(
+    #tryCatch(
       val_params[i_agent,] <- generate_parameters(data[,i_agent],
                                                   cluster.size = clusters_size[i_agent])
-      , error = function(e) {
-        val_params[i_agent,] <- 0
-      })
+      # , error = function(e) {
+      #   #val_params[i_agent,] <- 0
+      # })
   }
   return(val_params)
 }
+
+source("infer_latent_value.R")
 
 #' This function returns the threshold(s) corresponding the quantile of probability p.exceed
 #' @param data cleaned dataset
@@ -214,13 +229,12 @@ makeExceedances <- function(data, thresholds, normalize=TRUE){
 }
 
 
-
 plgpd_unif_at_zero <- function(x, p.zero, alpha, beta, kappa){
   if(p.zero < 0 | p.zero > 1) stop("p.zero should be between 0 and 1.")
   if(x == 0)
     return(runif(n = 1, min = 0, max = p.zero))
   else{
-    return(p.zero + (1-p.zero)*(1-max(0, (1+sign(alpha)*x/(beta+kappa))^{-alpha})))
+    return(p.zero + (1-p.zero)*(1-max(0, (1+sign(alpha)*x/(beta+kappa))^{-(alpha)})))
   }
 }
 
@@ -234,7 +248,7 @@ plgpd_unif_at_zero.row <- function(xs, p.zeroes, params.mat){
                                  beta = params.mat[i,2],
                                  kappa = params.mat[i,4])
   }
-  
+
   return(res)
 }
 
@@ -251,19 +265,30 @@ computePZero <- function(params){
 makeConditionalMatrices <- function(data, p.zeroes,
                                     horizons, params, n_samples = length(data[,1]), save=T, 
                                     name="conditional-matrices"){
+  # adapt the size of p.zeroes to the number of cols
+  if(length(p.zeroes) == 1){
+    p.zeroes <- rep(p.zeroes, length(data[1,]))
+  }
   
   #p.zeroes <- computePZero(params)
   thres <- getThresholds(data = data, p.exceed = p.zeroes)
   exceedeances <- makeExceedances(data = data, thresholds = thres, normalize = T)
-  
+
   exceedeances_cdf_ecdf <- exceedeances
+  exceedeances_cdf_ecdf <- t(apply(exceedeances_cdf_ecdf, MARGIN = 1,
+        FUN = function(x){
+          return(plgpd_unif_at_zero.row(xs=x, p.zeroes = p.zeroes, params.mat = params))
+          }))
+  exceedeances_cdf_ecdf <- as.matrix(exceedeances_cdf_ecdf)
+  
+  
   for(i in 1:length(exceedeances[1,])){
     # This creates ordered uniform samples in the same order 
     # as in data.
     exceedeances_cdf_ecdf[which(exceedeances[,i]==0), i] <- 
       ecdf(data[which(exceedeances[,i]==0), i])(data[which(exceedeances[,i]==0), i]) * p.zeroes[i]
   }
-  
+
   list_of_list_horizons <- list()
   n_vars <- length(data[1,])
   for(h in horizons){
@@ -283,15 +308,18 @@ makeConditionalMatrices <- function(data, p.zeroes,
                          ncol = n_vars+1)
       # filtering the i-th eCDF column with extremes 
       temp <- exceedeances_cdf_ecdf[which(exceedeances[1:(n_samples-h), i] > 0), i]
+      
       # addting those values in the nvars + 1 column
       mat_temp[,n_vars+1] <- ecdf(temp)(temp)
       
+      # looping on the first nvars columns
       for(j in 1:n_vars){
         # filtering data of j-th vars when i-th is extreme h timesteps before
         data_j <- exceedeances_cdf_ecdf[which(exceedeances[1:(n_samples-h), i] > 0)+h, j]
         # computing the probability that j-th was an extreme as well 
         # h timesteps after i-th was an extreme
-        quantile.update.values[i, j] <- mean(data_j <= thres[j])
+        quantile.update.values[i, j] <- mean(data_j <= p.zeroes[j]) # WARNING TODO <= or >=
+        #hist(data_j, breaks=50)
         data_j <- ecdf(data_j)(data_j)
         # saving the unif values of j-th var used here.
         mat_temp[,j] <- data_j 
@@ -318,29 +346,34 @@ makeConditionalMatrices <- function(data, p.zeroes,
 }
 
 #' @examples fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
-fitExceedancesVines <- function(exceedances, list_of_matrix){
+fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
   #list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
+  paste("nvars?", length(list_of_matrix[[horizons[1]]]$unif.values[[1]][1,])) %>% print
   list_of_list_horizons <- list_of_matrix
   list_of_list_horizons_vines <- list()
   
-  n_vars <- length(exceedances[1,])
+  n_vars <- length(list_of_list_horizons[[horizons[1]]]$unif.values[[1]][1,]) - 1 
+  col_names <- colnames(list_of_list_horizons[[horizons[1]]]$unif.values[[1]])
   
-  for(h in horizon){
+  for(h in horizons){
     list_of_vines_mat <- list()
     cat("Horizon: ", h, "\n")
     for(i in 1:n_vars){
-      cat("--->", colnames(exceedances)[i], " ")
+      cat("--->", col_names[i], "\n")
+      time_proc <- proc.time()[3]
       list_of_vines_mat[[i]] <- RVineStructureSelect(
-        data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3,4), type = 0,
+        data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3, 4), type = 0,
         selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
         trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
         se = FALSE, rotations = TRUE, method = "mle", cores = 7)
-      cat("DONE in", "TIME", " \n")
+      cat("       |-----> done in", round((proc.time()[3] - time_proc), 2), "s. \n")
     }
     list_of_list_horizons_vines[[h]] <- list_of_vines_mat
   }
   
-  list.save(list_of_list_horizons_vines, file = "cond-mat-vines-12361224-v2.RData")
+  if(save){
+    list.save(list_of_list_horizons_vines, file = "cond-mat-vines-12361224-v2.RData")
+  }
   return(list_of_list_horizons_vines)
 }
 

@@ -38,17 +38,16 @@ setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
 source("prep_univariate_latent_trawl_fit.R")
 library("evir")
 
+source("multi_ev.R")
 horizon <- c(1,2,3,6,12,24)
 s.sample <- 40000
-val.params <- findUnivariateParams(data = core_energy_data[,100:102], clusters_size = c(5,5,5))
+val.params <- findUnivariateParams(data = core_energy_data[,100:105], clusters_size = c(5,5,5))
 
-cont_mat <- makeConditionalMatrices(data = core_energy_data[,100:102],
+cont_mat <- makeConditionalMatrices(data = core_energy_data[,100:105],
                                     p.zeroes = 0.95,
                                     horizon = horizon,
                                     params = val.params,
-                                    n_samples = s.sample,
                                     name = "conditional-mat-test")
-
 
 cont_mat %>% print
 names(cont_mat)
@@ -68,37 +67,43 @@ require(VineCopula)
 list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
 list_of_list_horizons_vines <- list()
 
-n_vars <- length(threshold_data[1,100:102])
+n_vars <- length(threshold_data[1,100:105])
 
 list_of_list_horizons_vines_loaded <- list.load("cond-mat-vines-12361224-v2.RData")
 list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
 
-computeTRONwithLists <- function(exceedances, list_vines, list_of_matrix, N=100000){
+computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=100000, save=F){
   tron_probabilities <- list()
   set.seed(42)
-  for(h in horizon){
-    tron_proba_matrix <- matrix(0, nrow = length(exceedances[1,]), ncol = length(exceedances[1,]))
-    colnames(tron_proba_matrix) <- colnames(exceedances)[1:(length(exceedances[1,]))]
-    rownames(tron_proba_matrix) <- colnames(exceedances)[1:(length(exceedances[1,]))]
+  n_vars <- length(data[1,])
+  for(h in horizons){
+    tron_proba_matrix <- matrix(0, nrow = n_vars, ncol = n_vars)
+    colnames(tron_proba_matrix) <- colnames(data)
+    rownames(tron_proba_matrix) <- colnames(data)
     tron_proba_matrix_sd <- tron_proba_matrix
     cat(paste("Horizon", h, "\n"))
     for(i in 1:n_vars){
       cat(paste("--> extreme in", colnames(tron_proba_matrix)[i]), "...")
       te.st <- RVineSim(RVM = list_vines[[h]][[i]], N = N)
+      print(paste("min",min(te.st)))
+      print(paste("max",min(te.st)))
+      
       te.st <- te.st[,1:(length(te.st[1,])-1)]
       qq.values <- list_of_matrix[[h]]$quantiles.values[i,]
-      qq.values <- c(qq.values)
-      te.st <- t(apply(te.st, 1, function(x){x>qq.values}))
-      tron_proba_matrix[i,] <- apply(te.st, MARGIN = 2, mean)
-      tron_proba_matrix_sd[i,] <- (apply(te.st, MARGIN = 2, sd)/sqrt(length(te.st[,1])))
+      print(qq.values)
+      te.st <- t(apply(te.st, MARGIN = 1, FUN = function(x){x>qq.values}))
+      print(apply(te.st, MARGIN = 2, mean))
+      tron_proba_matrix[i,] <- t(apply(te.st, MARGIN = 2, mean))
+      tron_proba_matrix_sd[i,] <- t(apply(te.st, MARGIN = 2, sd))/sqrt(length(te.st[,1]))
       cat("\t done\n")
     }
     tron_probabilities[[h]] <- list(mean=tron_proba_matrix, sd=tron_proba_matrix_sd)
   }
   tron_probabilities[[1]]$mean
   tron_probabilities[[1]]$sd
-  
-  list.save(tron_probabilities, file = "tron-cond-test.RData")
+  if(save){
+    list.save(tron_probabilities, file = "tron-cond-test.RData")
+  }
   return(tron_probabilities)
 }
 
@@ -121,6 +126,9 @@ tron_temp[[24]]$mean
 
 tron_temp[[12]]
 
+#' Creates a string from current system clock.
+#' @return a string in the format "%Y-%m-%d-%H-%M-%S"
+#' @example makeRdmTimestamp()
 makeRdmTimestamp <- function(){
   striped_time <- strptime(Sys.time(), 
                            format =  "%Y-%m-%d %H:%M:%S")
@@ -133,9 +141,19 @@ makeRdmTimestamp <- function(){
 
 makeRdmTimestamp()
 
-makeFileName <- function(file_name, tag, extension){
+#' Allows user to create a filename using a main filename,
+#' a tag and an extension.
+#' @param file_name Main name of the file. If not given, replaced 
+#'                  by a timestamp (see makeRdmTimestamp).
+#' @param tag Additional tag to append if file_name is not given.
+#' @param extension File extension (e.g. "RData).
+#' @return A string in the format file_name + tag + extension.
+#' @examples 
+#' makeFileName(file_name="ok", tag="tag", extension=".RData") #returns "file.RData".
+#' makeFileName(tag="tag", extension=".csv") #returns makeRdmTimestamp + "tag.csv".
+makeFileName <- function(file_name=NA, tag, extension){
   if(file_name %>% is.na){
-    return(paste(makeRdmTimestamp(), "_matrix", ".RData", sep=""))
+    return(paste(makeRdmTimestamp(), tag, ".RData", sep=""))
   }else{
     return(paste(file_name, ".RData", sep=""))
   }
@@ -143,9 +161,60 @@ makeFileName <- function(file_name, tag, extension){
 
 makeFileName("ok", "_matrix", "RData")
 
-#' computeTRON allows to compute TRON probabilities very easily!
-computeTRON <- function(data, q.s, horizons, clusters, n_samples,
-                        name_matrices_file=NA, name_vine_file=NA, name_tron_file=NA){
+
+ChoosingThresholds <- function(data, p.zeroes){
+  if(length(p.zeroes)){
+    p.zeroes <- rep(p.zeroes, length(data[1,]))
+  }
+  col_names <- colnames(data)
+  tests_results <- list() 
+  
+  for(i in 1:length(data[1,])){
+    thres_test <- threshold_test(data[,i], p.zero = p.zeroes[i])
+    tests_results[[col_names[i]]] <- thres_test
+  }
+  
+  return(tests_results)
+}
+
+cleaned_data <- core_energy_data
+cleaned_data[,100:102] <- as.matrix(apply(cleaned_data[,100:102],
+                                          MARGIN = 2, 
+                                          FUN = function(x){deterministicCleaning(data=x, (1:length(cleaned_data[,1]))/24)}))
+
+tmp <- ChoosingThresholds(data = cleaned_data[,100:102],
+                          p.zeroes = c(0.95, 0.95, 0.95))
+tmp
+plot(tmp$temperature.Montreal$score$proba,
+     round(tmp$temperature.Montreal$score$p.values, 3),
+     lwd = 2, type="o", pch=23, lty=5)
+
+
+source("multi_ev.R")
+#'computeTRON allows to compute TRON probabilities very easily!
+#'@param data clean dataset
+#'@param p.zeroes a scalar or vector (as large as the number of columns of
+#'  data). of probabilities to be an exceedance of zero (proba of NOT being an
+#'  extreme).
+#'@param horizons a integer or vector (of integers) of look-ahead horizons for
+#'  extremes.
+#'@param clusters a integer or vector (of integers) of clusters size in the
+#'  autocorrelation sense. See \code{\link[ev.trawl]{GenerateParameters}}.
+#'@param n_samples Number of samples to compute the TRON probabilites via
+#'  Monte-Carlo.
+#'@param name_matrices_file Default is NA. If NA, we use \code{makeFileName(NA,
+#'  "_matrix", ".RData")}, otherwise we use \code{name_matrices_file.RData}.
+#'@param name_vine_file Default is NA. If NA, we use \code{makeFileName(NA,
+#'  "_matrix", ".RData")}, otherwise we use \code{name_vine_file.RData}.
+#'@param name_tron_file Default is NA. If NA, we use \code{makeFileName(NA,
+#'  "_matrix", ".RData")}, otherwise we use \code{name_tron_file.RData}.
+#'@param save Logical (default is TRUE) to save matrices, vines and tron
+#'  probabilities as RData files.
+#'@return Returns a list of TRON probabilities with horizons as keys.
+#'@seealso \code{\link[ev.trawl]{GenerateParameters}} for \code{clusters}.
+computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
+                        name_matrices_file=NA, name_vine_file=NA, 
+                        name_tron_file=NA, save=TRUE){
   name_matrices_file <- makeFileName(name_matrices_file, 
                                      tag = "_matrix",
                                      extension = ".RData")
@@ -156,46 +225,58 @@ computeTRON <- function(data, q.s, horizons, clusters, n_samples,
                                      tag = "_tron",
                                      extension = ".RData")
 
-  thresholds <- getThresholds(data = data, 
-                              p.exceed = q.s)
-  
-  univ.params <- findUnivariateParams(data = data, 
+  # Univariate parameters
+  exceendances <- makeExceedances(data = data,
+                                  thresholds = 
+                                    getThresholds(data, p.exceed = p.zeroes),
+                                  normalize = TRUE)
+
+  univ.params <- findUnivariateParams(data = exceendances, 
                                       clusters_size = clusters)
-  exceedances <- makeExceedances(data = data,
-                                 thresholds = thresholds,
-                                 normalize = TRUE)
+  
   # compute the matrices
   list_of_mat <- makeConditionalMatrices(data = data,
-                                      exceedeances = exceedances,
-                                      q.s = q.s,
-                                      horizon = horizons,
-                                      params = univ.params,
-                                      n_samples = n_samples,
-                                      name = name,
-                                      save = F)
-  list_of_mat <- rlist::list.save(list_of_mat, name_matrices_file) # save
+                                         p.zeroes = p.zeroes,
+                                         horizons = horizons,
+                                         params = univ.params,
+                                         n_samples = n_samples,
+                                         name = name,
+                                         save = F)
+  if(save){
+    rlist::list.save(list_of_mat, name_matrices_file) # save
+  }
   
   # compute the vines
-  list_vines <- fitExceedancesVines(exceedances = exceedances,
+  list_vines <- fitExceedancesVines(horizons = horizons, 
                                     list_of_matrix = list_of_mat)
-  list_vines <- rlist::list.save(list_vines, name_vine_file) #save
+  if(save){
+    rlist::list.save(list_vines, name_vine_file) #save
+  }
   
   # compute TRON
-  tron <- computeTRONwithLists(exceedances = exceedances, 
+  tron <- computeTRONwithLists(data = data,
+                               horizons = horizons,
                                list_vines = list_vines,
                                list_of_matrix = list_of_mat)
-  rlist::list.save(tron, name_tron_file) # save
-  
+  if(save){
+    rlist::list.save(tron, name_tron_file) # save
+  }
   return(tron)
 }
 
-computeTRON(data = core_energy_data[,100:105],
-            q.s = rep(0.95, 6),
-            horizons = c(1,2,3),
-            clusters = rep(5, 5),
-            n_samples = 10000)
 
+cleaned_data <- core_energy_data
+cleaned_data[,100:102] <- as.matrix(apply(cleaned_data[,100:102],
+                                 MARGIN = 2, 
+                                 FUN = function(x){deterministicCleaning(data=x, (1:length(cleaned_data[,1]))/24)}))
 
+tron_test <- computeTRON(data = cleaned_data[,100:102],
+                        p.zeroes = rep(0.95, 3),
+                        horizons = c(1,24),
+                        clusters = rep(5, 3),
+                        n_samples = 100000)
+tron_test[[1]]$mean
+tron_test[[24]]$mean
 
 
 
@@ -216,7 +297,7 @@ for(h in N_sims){
   for(i in 1:n_vars){
     te.st <- RVineSim(RVM = list_of_list_horizons_vines_loaded[[6]][[i]], N = h)
     qq.values <- list_of_list_horizons[[6]]$quantiles.values[i,]
-    qq.values <- c(qq.values, NA)
+    qq.values <- c(qq.values)
     print(qq.values)
     te.st <- t(apply(te.st, 1, function(x){x>qq.values}))
     te.st <- te.st[,1:6]
