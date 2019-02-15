@@ -42,12 +42,14 @@ library("evir")
 source("multi_ev.R")
 horizon <- c(1,2,3,6,12,24)
 s.sample <- 40000
-val.params <- findUnivariateParams(data = core_energy_data[,100:105], clusters_size = c(5,5,5))
+val.params <- findUnivariateParams(data = core_energy_data[,100:105], clusters_size = rep(8, 6),
+                                   thresholds = getThresholds(core_energy_data[,100:105], p.exceed = 0.8))
+
 
 cont_mat <- makeConditionalMatrices(data = core_energy_data[,100:105],
                                     p.zeroes = 0.95,
                                     horizon = horizon,
-                                    params = val.params,
+                                    clusters_size = rep(5, 6),
                                     name = "conditional-mat-test")
 
 cont_mat %>% print
@@ -183,15 +185,12 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
                                   thresholds = 
                                     getThresholds(data, p.exceed = p.zeroes),
                                   normalize = TRUE)
-
-  univ.params <- findUnivariateParams(data = exceendances, 
-                                      clusters_size = clusters)
   
   # compute the matrices
   list_of_mat <- makeConditionalMatrices(data = data,
                                          p.zeroes = p.zeroes,
                                          horizons = horizons,
-                                         params = univ.params,
+                                         clusters_size = clusters,
                                          n_samples = n_samples,
                                          name = name,
                                          save = F)

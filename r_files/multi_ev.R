@@ -10,10 +10,18 @@ source("prep_univariate_latent_trawl_fit.R")
 source("utils.R")
 
 
-
-findUnivariateParams <- function(data, clusters_size){
+#' Wrapper from \code{ev.trawl} GenerateParameters to fit univariate latent
+#' trawl extreme values model.
+#'
+#' @param data cleaned dataset.
+#' @param clusters_size Extreme clusters size (integer) vector .
+#' @param thresholds Thresholds values for extremes.
+#' @return Set of thresholds values as large as \code{data} after which values
+#'   in data are considered extremes.
+findUnivariateParams <- function(data, clusters_size, thresholds){
   n_vars <- length(data[1,])
-  
+  n_rows <- length(data[,1])
+  n_rows
   if(any(clusters_size <= 0)){
     stop('clusters_size should have positive entries.')
   }
@@ -27,14 +35,32 @@ findUnivariateParams <- function(data, clusters_size){
   }
   
   val_params <- matrix(0, nrow = n_vars, ncol = 4)
+  exc <- makeExceedances(data = data, thresholds = thresholds, normalize = TRUE)
   for(i_agent in 1:n_vars){
-    print(i_agent)
-    #tryCatch(
-      val_params[i_agent,] <- generate_parameters(data[,i_agent],
-                                                  cluster.size = clusters_size[i_agent])
-      # , error = function(e) {
-      #   #val_params[i_agent,] <- 0
-      # })
+      cat("Generating univ MLEs for", colnames(data)[i_agent], "...")
+      val_params[i_agent,] <- ev.trawl::GenerateParameters(data = exc[,i_agent],
+                                                           cluster.size = clusters_size[i_agent])
+      cat("done\n")
+      # 
+      # values <- exc[1:1000,i_agent] # TODO 1000!
+      # fn_to_optim <- function(x) {
+      #   return(ParamsListFullPL(values = values, params = x, times = (1:n_rows)/n_rows,
+      #                           delta = clusters_size[i_agent], transformation = T))
+      # }
+      # lower <-c(-10,0.1,0.01,0.01)
+      # upper <-c(-0.1,100,2,40)
+      # 
+      # initial_guess <- list()
+      # exp_params_names <- c("alpha", "beta", "rho", "kappa")
+      # for(j in 1:4){
+      #   initial_guess[[exp_params_names[j]]] <- val_params[i_agent,j]
+      # }
+      # res <- stats::optim(fn_to_optim, par = initial_guess, 
+      #                                       method = "L-BFGS-B", 
+      #                                       lower = lower, upper = upper, 
+      #                                       control = list(maxit=2))$par
+      # print(res)
+      # val_params <- res
   }
   return(val_params)
 }
@@ -157,16 +183,25 @@ computePZero <- function(params){
   return(1-(1+params[,4]/params[,2])^{-abs(params[,1])})
 }
 
-#' @param data clean dataset
+#' Constructs a collecttion of matrices with the primary set of keys being the
+#' horizons and the second one being the column indices. Those matrices are the
+#' data conditional on extreme value in the respectivel column.
+#'
+#' @param data clean dataset.
 #' @param p.zeroes threshold in probability to be considered an extreme (ex:
-#'   0.95)
-#' @param horizons sequence of selected extreme horizons
-#' @param params model params for each column separately (indep).
-#' @param save Logical. Whether we save the conditonal matrices.
+#'   0.95).
+#' @param horizons (integer) sequence of selected extreme horizons.
+#' @param clusters_size Extremes cluster size for each marginal.
+#' @param save Logical (flag, default to TRUE). Whether we save the conditonal
+#'   matrices.
+#' @param n_samples Number of rows selected to create the matrices (from 1 to
+#'   \code{n_samples}).
+#' @param name Filename if the collection of matrices is saved.
 #' @return Double-leveled list with horizons as first set of keys and columns
-#'   indices as second set of keys.
+#'   indices as second set of keys. E.g. \code{result[[2]][[4]]} would pick the
+#'   second horizon on the 4th variable.
 makeConditionalMatrices <- function(data, p.zeroes,
-                                    horizons, params, n_samples = length(data[,1]), save=T, 
+                                    horizons, clusters_size, n_samples = length(data[,1]), save=T, 
                                     name="conditional-matrices"){
   # adapt the size of p.zeroes to the number of cols
   if(length(p.zeroes) == 1){
@@ -175,8 +210,11 @@ makeConditionalMatrices <- function(data, p.zeroes,
   
   #p.zeroes <- computePZero(params)
   thres <- getThresholds(data = data, p.exceed = p.zeroes)
+  
+  params <- findUnivariateParams(data = data, clusters_size = clusters_size, thresholds = thres)
   exceedeances <- makeExceedances(data = data, thresholds = thres, normalize = T)
 
+  # TODO refactor
   exceedeances_cdf_ecdf <- exceedeances
   exceedeances_cdf_ecdf <- t(apply(exceedeances_cdf_ecdf, MARGIN = 1,
         FUN = function(x){
@@ -248,6 +286,12 @@ makeConditionalMatrices <- function(data, p.zeroes,
   return(list_of_list_horizons)
 }
 
+#' @param horizons (integer) sequence of selected extreme horizons.
+#' @param list_of_matrix Collection of conditional matrices (as created by
+#'   \code{makeConditionalMatrices}).
+#' @param save Logical (flag, default to TRUE). Whether we save the conditonal
+#'   matrices.
+#' @seealso \code{makeConditionalMatrices}.
 #' @examples fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
 fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
   #list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
