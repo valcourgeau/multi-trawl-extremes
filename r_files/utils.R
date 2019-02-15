@@ -99,3 +99,71 @@ makeMatrix <- function(data, vector_to_rep){
   
   return(rep_thres)
 }
+
+#' Creates a string from current system clock.
+#' @return a string in the format "%Y-%m-%d-%H-%M-%S"
+#' @example makeRdmTimestamp()
+makeRdmTimestamp <- function(){
+  striped_time <- strptime(Sys.time(), 
+                           format =  "%Y-%m-%d %H:%M:%S")
+  elapsed <- as.integer(proc.time()[3])
+  pasting <- sapply(X = c(year, month, day, hour, minute, second),
+                    FUN = function(x){x(striped_time)})
+  pasting <- paste(pasting, collapse = "-")
+  return(pasting %>% as.character)
+}
+
+makeRdmTimestamp()
+
+#' Allows user to create a filename using a main filename,
+#' a tag and an extension.
+#' @param file_name Main name of the file. If not given, replaced 
+#'                  by a timestamp (see makeRdmTimestamp).
+#' @param tag Additional tag to append if file_name is not given.
+#' @param extension File extension (e.g. "RData).
+#' @return A string in the format file_name + tag + extension.
+#' @examples 
+#' makeFileName(file_name="ok", tag="tag", extension=".RData") #returns "file.RData".
+#' makeFileName(tag="tag", extension=".csv") #returns makeRdmTimestamp + "tag.csv".
+makeFileName <- function(file_name=NA, tag, extension){
+  if(file_name %>% is.na){
+    return(paste(makeRdmTimestamp(), tag, ".RData", sep=""))
+  }else{
+    return(paste(file_name, ".RData", sep=""))
+  }
+}
+
+makeFileName("ok", "_matrix", "RData")
+
+
+#' A wrapper for the automated threshold selection from Bader et al. (2018).
+#'
+#' @param data dataset (vector or matrix)
+#' @param p.zeroes scalar or vector (to the length of \code{data}) of
+#'   probability of NOT having an extreme value (or threshold probability)
+#' @return List with column names as keys and threshold selection tests results
+#'   as values.
+#' @seealso Bader, Brian; Yan, Jun; Zhang, Xuebin. Automated threshold selection
+#'   for extreme value analysis via ordered goodness-of-fit tests with
+#'   adjustment for false discovery rate. Ann. Appl. Stat. 12 (2018), no. 1,
+#'   310--329. doi:10.1214/17-AOAS1092.
+#'   https://projecteuclid.org/euclid.aoas/1520564474
+ChoosingThresholds <- function(data, p.zeroes){
+  if(!is.vector(data)){
+    ncol <- length(data[1,])
+  }
+  if(length(p.zeroes) == 1){
+    p.zeroes <- rep(p.zeroes, ncol)
+  }
+  col_names <- colnames(data)
+  if(length(p.zeroes))
+  
+  tests_results <- list() 
+  
+  for(i in 1:ncol){
+    thres_test <- threshold_test(data[,i], p.zero = p.zeroes[i])
+    tests_results[[col_names[i]]] <- thres_test
+  }
+  
+  return(tests_results)
+}

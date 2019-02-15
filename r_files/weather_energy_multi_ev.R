@@ -7,6 +7,7 @@ require(rlist)
 
 setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
 source("multi_ev.R")
+source("utils.R")
 
 # loading data
 merged_dataset_folder <- "C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/data/merged-datasets/"
@@ -126,56 +127,8 @@ tron_temp[[24]]$mean
 
 tron_temp[[12]]
 
-#' Creates a string from current system clock.
-#' @return a string in the format "%Y-%m-%d-%H-%M-%S"
-#' @example makeRdmTimestamp()
-makeRdmTimestamp <- function(){
-  striped_time <- strptime(Sys.time(), 
-                           format =  "%Y-%m-%d %H:%M:%S")
-  elapsed <- as.integer(proc.time()[3])
-  pasting <- sapply(X = c(year, month, day, hour, minute, second),
-               FUN = function(x){x(striped_time)})
-  pasting <- paste(pasting, collapse = "-")
-  return(pasting %>% as.character)
-}
-
-makeRdmTimestamp()
-
-#' Allows user to create a filename using a main filename,
-#' a tag and an extension.
-#' @param file_name Main name of the file. If not given, replaced 
-#'                  by a timestamp (see makeRdmTimestamp).
-#' @param tag Additional tag to append if file_name is not given.
-#' @param extension File extension (e.g. "RData).
-#' @return A string in the format file_name + tag + extension.
-#' @examples 
-#' makeFileName(file_name="ok", tag="tag", extension=".RData") #returns "file.RData".
-#' makeFileName(tag="tag", extension=".csv") #returns makeRdmTimestamp + "tag.csv".
-makeFileName <- function(file_name=NA, tag, extension){
-  if(file_name %>% is.na){
-    return(paste(makeRdmTimestamp(), tag, ".RData", sep=""))
-  }else{
-    return(paste(file_name, ".RData", sep=""))
-  }
-}
-
-makeFileName("ok", "_matrix", "RData")
 
 
-ChoosingThresholds <- function(data, p.zeroes){
-  if(length(p.zeroes)){
-    p.zeroes <- rep(p.zeroes, length(data[1,]))
-  }
-  col_names <- colnames(data)
-  tests_results <- list() 
-  
-  for(i in 1:length(data[1,])){
-    thres_test <- threshold_test(data[,i], p.zero = p.zeroes[i])
-    tests_results[[col_names[i]]] <- thres_test
-  }
-  
-  return(tests_results)
-}
 
 cleaned_data <- core_energy_data
 cleaned_data[,100:102] <- as.matrix(apply(cleaned_data[,100:102],

@@ -158,10 +158,13 @@ computePZero <- function(params){
 }
 
 #' @param data clean dataset
-#' @param p.zeroes threshold in probability to be considered an extreme (ex: 0.95)
+#' @param p.zeroes threshold in probability to be considered an extreme (ex:
+#'   0.95)
 #' @param horizons sequence of selected extreme horizons
 #' @param params model params for each column separately (indep).
 #' @param save Logical. Whether we save the conditonal matrices.
+#' @return Double-leveled list with horizons as first set of keys and columns
+#'   indices as second set of keys.
 makeConditionalMatrices <- function(data, p.zeroes,
                                     horizons, params, n_samples = length(data[,1]), save=T, 
                                     name="conditional-matrices"){
