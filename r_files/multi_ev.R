@@ -79,22 +79,6 @@ getThresholds <- function(data, p.exceed){
 
 getThresholds(core_energy_data[,1:3], c(0.1,0.5,0.8))
 
-
-#' This function replicates the vector to the length of data 
-#' by vertically stacking it.
-#' @param data cleaned dataset
-#' @param vector_to_rep vector that will be replicated
-#' @examples 
-#' data <- matrix(runif(9), ncol=3)
-#' vector_to_rep <- c(1,2,3)
-#' makeMatrix(data = data, vector_to_rep = vector_to_rep)
-makeMatrix <- function(data, vector_to_rep){
-  n <- length(data[,1])
-  rep_thres <- t(matrix(rep(vector_to_rep, n), ncol=n))
-  
-  return(rep_thres)
-}
-
 #' Wrapper to makeMatrix in the special case of extreme value thresholds.
 #' We consider p.exceed as the threshold cut-off probability.
 #' @param data cleaned dataset

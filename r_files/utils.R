@@ -82,3 +82,20 @@ datasetCleaning <- function(data, dates){
   colnames(result) <- colnames(data)
   return(result)
 }
+
+
+
+#' This function replicates the vector to the length of data 
+#' by vertically stacking it.
+#' @param data cleaned dataset
+#' @param vector_to_rep vector that will be replicated
+#' @examples 
+#' data <- matrix(runif(9), ncol=3)
+#' vector_to_rep <- c(1,2,3)
+#' makeMatrix(data = data, vector_to_rep = vector_to_rep)
+makeMatrix <- function(data, vector_to_rep){
+  n <- length(data[,1])
+  rep_thres <- t(matrix(rep(vector_to_rep, n), ncol=n))
+  
+  return(rep_thres)
+}
