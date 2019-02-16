@@ -16,12 +16,13 @@ source("utils.R")
 #' @param data cleaned dataset.
 #' @param clusters_size Extreme clusters size (integer) vector .
 #' @param thresholds Thresholds values for extremes.
+#' @param optim Logical (default=TRUE). Whether to execute BFGS optimisation with fixed alpha.
 #' @return Set of thresholds values as large as \code{data} after which values
 #'   in data are considered extremes.
-findUnivariateParams <- function(data, clusters_size, thresholds){
+findUnivariateParams <- function(data, clusters_size, thresholds, optim=T){
   n_vars <- length(data[1,])
   n_rows <- length(data[,1])
-  n_rows
+  
   if(any(clusters_size <= 0)){
     stop('clusters_size should have positive entries.')
   }
@@ -40,27 +41,55 @@ findUnivariateParams <- function(data, clusters_size, thresholds){
       cat("Generating univ MLEs for", colnames(data)[i_agent], "...")
       val_params[i_agent,] <- ev.trawl::GenerateParameters(data = exc[,i_agent],
                                                            cluster.size = clusters_size[i_agent])
-      cat("done\n")
-      # 
-      # values <- exc[1:1000,i_agent] # TODO 1000!
-      # fn_to_optim <- function(x) {
-      #   return(ParamsListFullPL(values = values, params = x, times = (1:n_rows)/n_rows,
-      #                           delta = clusters_size[i_agent], transformation = T))
-      # }
-      # lower <-c(-10,0.1,0.01,0.01)
-      # upper <-c(-0.1,100,2,40)
-      # 
-      # initial_guess <- list()
-      # exp_params_names <- c("alpha", "beta", "rho", "kappa")
-      # for(j in 1:4){
-      #   initial_guess[[exp_params_names[j]]] <- val_params[i_agent,j]
-      # }
-      # res <- stats::optim(fn_to_optim, par = initial_guess, 
-      #                                       method = "L-BFGS-B", 
-      #                                       lower = lower, upper = upper, 
-      #                                       control = list(maxit=2))$par
-      # print(res)
-      # val_params <- res
+      cat(" done.\n")
+      if(optim){
+        cat("|---> Preparing optimisation...")
+        marginal_values <- exc[1:2000,i_agent] # TODO 1000!
+        marginal_times <- (1:n_rows)/n_rows
+        exp_params_names <- c("alpha", "beta", "rho", "kappa")
+        fixed_params_names <- c("alpha")
+        fixed_params_index <- which(exp_params_names %in% fixed_params_names)
+        
+        fn_to_optim <- function(x) {
+          return(-UnivariateFullPL(values = marginal_values, 
+                                   params = x, 
+                                   times = marginal_times,
+                                   delta = clusters_size[i_agent], 
+                                   model_vars_names = exp_params_names,
+                                   fixed_names = fixed_params_names,
+                                   fixed_params = x[fixed_params_index],
+                                   transformation = T))
+        }
+        lower <-c(1,
+                  0.01,
+                  0.1)
+        upper <-c(50,
+                  2,
+                  50)
+        
+        initial_guess <- list()
+        for(j in 1:length(val_params[1,])){
+          if(!(j %in% fixed_params_index)){
+            initial_guess[[exp_params_names[j]]] <- val_params[i_agent,j] 
+          }
+        }
+        cat(" initialise...")
+        time_to_cv <- proc.time()[3]
+        res <- stats::optim(fn_to_optim, 
+                            par = initial_guess,
+                            method = "L-BFGS-B",
+                            lower = lower, upper = upper,
+                            control = list(maxit=100, 
+                                           factr=1e13, 
+                                           trace=0)
+                      )$par
+        cat("done in ", proc.time()[3]-time_to_cv, "s.\n", sep = "")
+        res_concat <- rep(0, 4)
+        res_concat[fixed_params_index] <- val_params[i_agent, fixed_params_index]
+        res_concat[-fixed_params_index] <- res
+        val_params[i_agent, ] <- res_concat
+      }
+      
   }
   return(val_params)
 }
