@@ -63,9 +63,9 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T){
         lower <-c(1,
                   0.01,
                   0.1)
-        upper <-c(50,
-                  2,
-                  50)
+        upper <-c(100,
+                  5,
+                  100)
         
         initial_guess <- list()
         for(j in 1:length(val_params[1,])){
