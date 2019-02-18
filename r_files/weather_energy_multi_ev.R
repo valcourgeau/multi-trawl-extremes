@@ -22,7 +22,6 @@ colnames(energy_weather_merged)
 cols_to_ignore <- c("datetime", "index.x", "index.y")
 types_to_ignore <- c("factor")
 tags_to_ignore <- c(
-         "wind_direction",
          "Beersheba",
          "Haifa",
          "Nahariyya",
@@ -36,7 +35,11 @@ core_energy_data <- getCoreData(data = energy_weather_merged,
                     ignore_tags = tags_to_ignore,
                     ignore_cols = cols_to_ignore,
                     ignore_data_type = types_to_ignore)
-
+tags_to_collect <- colnames(core_energy_data)[!grepl(pattern = "_", colnames(core_energy_data))]
+# core_energy_data <- ConcatAndReplaceWind(energy_weather_merged, 
+#                                          tags = c("New.York", "Detroit"))
+core_energy_data <- ConcatAndReplaceWind(core_energy_data, 
+                                         tags = unique(sub('.*\\.', '', tags_to_collect)))
 dim(energy_weather_merged)
 dim(core_energy_data)
 
@@ -71,7 +74,7 @@ cont_mat[[1]]$quantiles.values
 # Choosing the variables to include
 core_energy_data$humidity.Vancouver %>% (function(x){head(x, 1000)}) %>% (function(x){plot(x, type = 'l')})
 core_energy_data$PJME_hourly.PJME_MW %>% (function(x){head(x, 1000)}) %>% (function(x){plot(x, type = 'l')})
-core_energy_data$ %>% (function(x){head(x, 5000)}) %>% (function(x){plot(x, type = 'l')})
+core_energy_data$humidity.Portland %>% (function(x){head(x, 5000)}) %>% (function(x){plot(x, type = 'l')})
 
 
 

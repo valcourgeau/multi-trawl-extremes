@@ -185,7 +185,83 @@ datasetCleaning <- function(data, dates, sequential=T){
   return(result)
 }
 
+#' Returns the projection of \code{wind} using \code{direction} (in degrees) and
+#' potentially rotated using \code{offset}.
+#'
+#' @param wind vector of wind data.
+#' @param direction vector of wind direction (in degrees from 0 to 360).
+#' @param offset offset angle to rotate
+#' @return a matrix with two columns with \code{cos} \code{sin} projections
+#'   respectively.
+#' @examples
+#' WindSpeedProjection(rnorm(mean=100, n=100), direction=rnorm(n=100)*10+150, name="wind_speed")
+WindSpeedProjection <- function(wind, direction, name=NA, offset=0){
+  wind <- abs(wind) # taking absolute value just in case
+  direction <- ((direction+offset) %% 360)/360
+  result <- cbind(wind * cos(direction), wind * sin(direction))
+  result <- data.frame(result)
+  if(!is.na(name)){
+    colnames(result) <- c(paste(name, ".cos", sep = ""),
+                          paste(name, ".sin", sep = ""))
+  }
+  return(result)
+}
 
+
+#' @examples 
+#' ExtractProcessWindData(energy_weather_merged, "New.York") %>% head
+ExtractProcessWindData <- function(data, tag){
+  speed_filter <- GetColStartingWith(data = data, 
+                                     tags = "wind_speed.", 
+                                     return.filters = T)
+
+  direction_filter <- GetColStartingWith(data=data, 
+                                         tags = "wind_direction.", 
+                                         return.filters = T)
+
+  data_tagged <- GetColStartingWith(data = data, 
+                                    tags = tag, 
+                                    return.filters = F)
+  cols_tagged <- GetColStartingWith(data = data, 
+                                    tags = tag, 
+                                    return.filters = T)
+  direction_filter <- direction_filter & cols_tagged
+  speed_filter <- speed_filter & cols_tagged
+  
+  data_direction <- data[, direction_filter] %>% as.vector
+  data_speed <- data[, speed_filter] %>% as.vector
+  name_col <- colnames(data_tagged)[GetColStartingWith(data = data_tagged, tags = "wind_speed", return.filters = T)]
+  
+  return(WindSpeedProjection(wind = data_speed, direction = data_direction, name = name_col))
+}
+#test 
+# sqrt(rowSums(asd(energy_weather_merged, "New.York")^2))
+# energy_weather_merged$wind_speed.New.York
+
+
+#' @examples 
+#' ProcessWindProjections(data = energy_weather_merged, c("New.York", "Detroit")) %>% head
+ProcessWindProjections <- function(data, tags){
+  return(do.call(cbind, 
+                 lapply(tags, function(x){
+                                ExtractProcessWindData(data = data,
+                                                       tag = x)
+                              }
+                   )
+                 )
+         )
+}
+
+#' @examples
+#' ConcatAndReplaceWind(energy_weather_merged, c("New.York", "Houston")) %>% colnames
+
+ConcatAndReplaceWind <- function(data, tags){
+  concat_vals <- ProcessWindProjections(data = data, tags = tags)
+  removing_tags_index <- ignoreColStartingWith(data, c("wind_direction", "wind_speed"), return.filters = T)
+  print(removing_tags_index)
+  concat_vals <- cbind(data[,removing_tags_index], concat_vals)
+  return(concat_vals)
+}
 
 #' This function replicates the vector to the length of data 
 #' by vertically stacking it.
