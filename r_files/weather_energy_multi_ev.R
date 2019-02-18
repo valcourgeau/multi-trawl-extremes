@@ -22,7 +22,15 @@ colnames(energy_weather_merged)
 cols_to_ignore <- c("datetime", "index.x", "index.y")
 types_to_ignore <- c("factor")
 tags_to_ignore <- c(
-         "wind_direction")
+         "wind_direction",
+         "Beersheba",
+         "Haifa",
+         "Nahariyya",
+         "Jerusalem",
+         "Eilat",
+         "Tel.Aviv")
+dates <- strptime(energy_weather_merged$datetime, "%Y-%m-%d %H:%M:%S", tz = "GMT")
+#strptime(energy_weather_merged$datetime, "%Y-%m-%d %H:%M:%S", tz = "GMT")
 
 core_energy_data <- getCoreData(data = energy_weather_merged, 
                     ignore_tags = tags_to_ignore,
@@ -34,6 +42,9 @@ dim(core_energy_data)
 
 # dates is a vector of datetime
 # data is a vector of data 
+
+core_energy_data <- datasetCleaning(data = core_energy_data, dates = dates)
+
 
 setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
 source("prep_univariate_latent_trawl_fit.R")
@@ -55,6 +66,13 @@ cont_mat <- makeConditionalMatrices(data = core_energy_data[,100:105],
 cont_mat %>% print
 names(cont_mat)
 cont_mat[[1]]$quantiles.values
+
+
+# Choosing the variables to include
+core_energy_data$humidity.Vancouver %>% (function(x){head(x, 1000)}) %>% (function(x){plot(x, type = 'l')})
+core_energy_data$PJME_hourly.PJME_MW %>% (function(x){head(x, 1000)}) %>% (function(x){plot(x, type = 'l')})
+core_energy_data$ %>% (function(x){head(x, 5000)}) %>% (function(x){plot(x, type = 'l')})
+
 
 
 ############################################################################################

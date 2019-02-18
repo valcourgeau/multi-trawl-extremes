@@ -1,16 +1,40 @@
-#' @examples 
+
+#' @param data dataset
+#' @param tags Column tags (e.g. partial name) to remove.
+#' @param return.filters Logical flag (default FALSE). Whether to return the
+#'   filtered indices (TRUE) or filtered data (FALSE).
+#' @examples
 #' ok <- ignoreColStartingWith(data = energy_weather_merged, tags = c("humidity",
 #'                                                                  "wind_direction"))
 ignoreColStartingWith <- function(data, tags, return.filters=F){
   # return.filters 
-  filtered_by_tag <- sapply(tags, function(x){grepl(x, colnames(data))})
+  filtered_by_tag <- sapply(tags, function(x){grepl(x, colnames(data))}) # find the right columns
   filtered_by_tag <- apply(filtered_by_tag, 
                            MARGIN = 1, 
                            FUN = function(x){Reduce('|',x)}) # merging the filters
   if(return.filters){
     return(!filtered_by_tag)
+  }else{
+    return(data[,!filtered_by_tag]) 
   }
-  return(data[,!filtered_by_tag]) 
+}
+
+#' Returns a filter for columns of \code{data} which contains \code{tags}.
+#' @param data dataset
+#' @param tags Column tags (e.g. partial name) to remove.
+#' @param return.filters Logical flag (default FALSE). Whether to return the
+#'   filtered indices (TRUE) or filtered data (FALSE).
+#' @examples
+#' ok <- GetColStartingWith(data = energy_weather_merged, tags = c("humidity",
+#'                                                                  "wind_direction"))
+GetColStartingWith <-  function(data, tags, return.filters=F){
+  filtered <- !ignoreColStartingWith(data = data, tags = tags,
+                                     return.filters = T)
+  if(return.filters){
+    return(filtered)
+  }else{
+    return(data[, filtered])
+  }
 }
 
 
@@ -69,13 +93,91 @@ deterministicCleaning <- function(dates, data, p.adjust.method="bonferroni"){
   return(lm(data ~ fitting_matrix)$residuals)
 }
 
-#' @examples 
+DeterministicCleaningSequential <- function(dates, data, 
+                                     wday = F, month = F,
+                                     quarter = F,
+                                     hour = F, seasons = NA,
+                                     p.adjust.method="bonferroni"){
+  #dates <- strptime(energy_weather_merged$datetime, "%Y-%m-%d %H:%M:%S", tz = "GMT")
+  if(length(dates) != length(data)){
+    stop('Data and dates should have same length.')
+  }
+  
+  fitting_mat <- as.matrix(rep(1, length(data))) # creating skeleton of matrix
+  
+  if(!any(is.na(seasons)) & is.vector(seasons)){
+    temp <- do.call(cbind,
+                    lapply(seasons, 
+                           FUN = function(x){
+                             cbind(cos(2*pi*(1:length(dates))/x),
+                                   sin(2*pi*(1:length(dates))/x))
+                           }))
+    fitting_mat <- cbind(fitting_mat, temp)
+  }
+  
+  if(quarter){
+    temp <- do.call(cbind,
+                    lapply(1:3, 
+                           FUN = function(i){quarter(dates) == i}))
+    fitting_mat <- cbind(fitting_mat, temp)
+  }
+  if(wday){
+    temp <- do.call(cbind,
+                    lapply(1:6, 
+                           FUN = function(i){wday(dates) == i}))
+    fitting_mat <- cbind(fitting_mat, temp)
+  }
+  if(month){
+    temp <- do.call(cbind,
+                    lapply(1:12, 
+                           FUN = function(i){month(dates) == i}))
+    fitting_mat <- cbind(fitting_mat, temp)
+  }
+  if(hour){
+    temp <- do.call(cbind,
+                    lapply(1:23, 
+                           FUN = function(i){hour(dates) == i}))
+    fitting_mat <- cbind(fitting_mat, temp)
+  }
+  
+  fit <- lm(data ~ fitting_mat) # we use fitting_mat[,-1] to remove skeleton
+  
+  # adjusting the method to take in account multiple p.values testing
+  p.v.adjusted <- summary(fit)$coefficients[,4]
+  p.v.adjusted <- p.adjust(p.v.adjusted, method = p.adjust.method)
+  # TODO test that!
+  # print(p.v.adjusted)
+  
+  fitting_indices <- which(p.v.adjusted < 0.05)
+  print(length(fitting_indices))
+  # if(1 %in% fitting_indices){
+  #   fitting_indices <- fitting_indices[-1]
+  # }
+  #fitting_mat <- fitting_mat[,fitting_indices-1]
+  
+  fitting_mat <- fitting_mat[,fitting_indices]
+  return(lm(data ~ fitting_mat)$residuals)
+}
+
+
+#' @param data cleaned dataset
+#' @param dates vector of numerical dates (timestamps)
+#' @param sequential Logical flag (default = TRUE). Whether to use the
+#'   sequential creation of fitting matrix with wday, month, quarter, hour,
+#'   seasons of 12, 24, 48 and 24*365.
+#' @examples
 #' test <- datasetCleaning(data = core_energy_data,
 #'                         dates = energy_weather_merged$datetime)
-datasetCleaning <- function(data, dates){
+datasetCleaning <- function(data, dates, sequential=T){
   result <- apply(data, MARGIN = 2, 
                   FUN = function(x){
-                    deterministicCleaning(data = x, dates = dates)
+                    if(sequential){
+                      DeterministicCleaningSequential(data = x, dates = dates,
+                                                      wday = T, month = T, quarter = T,
+                                                      hour = T, seasons = c(12, 24, 48, 24*365))
+                    }else{
+                      deterministicCleaning(dates = dates, data = data)
+                    }
                   }
   )
   result <- as.data.frame(result)
