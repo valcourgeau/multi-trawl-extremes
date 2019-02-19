@@ -191,76 +191,7 @@ plot(tmp$temperature.Montreal$score$proba,
      lwd = 2, type="o", pch=23, lty=5)
 
 
-source("multi_ev.R")
-#'computeTRON allows to compute TRON probabilities very easily!
-#'@param data clean dataset
-#'@param p.zeroes a scalar or vector (as large as the number of columns of
-#'  data). of probabilities to be an exceedance of zero (proba of NOT being an
-#'  extreme).
-#'@param horizons a integer or vector (of integers) of look-ahead horizons for
-#'  extremes.
-#'@param clusters a integer or vector (of integers) of clusters size in the
-#'  autocorrelation sense. See \code{\link[ev.trawl]{GenerateParameters}}.
-#'@param n_samples Number of samples to compute the TRON probabilites via
-#'  Monte-Carlo.
-#'@param name_matrices_file Default is NA. If NA, we use \code{makeFileName(NA,
-#'  "_matrix", ".RData")}, otherwise we use \code{name_matrices_file.RData}.
-#'@param name_vine_file Default is NA. If NA, we use \code{makeFileName(NA,
-#'  "_matrix", ".RData")}, otherwise we use \code{name_vine_file.RData}.
-#'@param name_tron_file Default is NA. If NA, we use \code{makeFileName(NA,
-#'  "_matrix", ".RData")}, otherwise we use \code{name_tron_file.RData}.
-#'@param save Logical (default is TRUE) to save matrices, vines and tron
-#'  probabilities as RData files.
-#'@return Returns a list of TRON probabilities with horizons as keys.
-#'@seealso \code{\link[ev.trawl]{GenerateParameters}} for \code{clusters}.
-computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
-                        name_matrices_file=NA, name_vine_file=NA, 
-                        name_tron_file=NA, save=TRUE){
-  name_matrices_file <- makeFileName(name_matrices_file, 
-                                     tag = "_matrix",
-                                     extension = ".RData")
-  name_vine_file <- makeFileName(name_vine_file, 
-                                     tag = "_vines",
-                                     extension = ".RData")
-  name_tron_file <- makeFileName(name_tron_file, 
-                                     tag = "_tron",
-                                     extension = ".RData")
 
-  # Univariate parameters
-  exceendances <- makeExceedances(data = data,
-                                  thresholds = 
-                                    getThresholds(data, p.exceed = p.zeroes),
-                                  normalize = TRUE)
-  
-  # compute the matrices
-  list_of_mat <- makeConditionalMatrices(data = data,
-                                         p.zeroes = p.zeroes,
-                                         horizons = horizons,
-                                         clusters_size = clusters,
-                                         n_samples = n_samples,
-                                         name = name,
-                                         save = F)
-  if(save){
-    rlist::list.save(list_of_mat, name_matrices_file) # save
-  }
-  
-  # compute the vines
-  list_vines <- fitExceedancesVines(horizons = horizons, 
-                                    list_of_matrix = list_of_mat)
-  if(save){
-    rlist::list.save(list_vines, name_vine_file) #save
-  }
-  
-  # compute TRON
-  tron <- computeTRONwithLists(data = data,
-                               horizons = horizons,
-                               list_vines = list_vines,
-                               list_of_matrix = list_of_mat)
-  if(save){
-    rlist::list.save(tron, name_tron_file) # save
-  }
-  return(tron)
-}
 
 
 cleaned_data <- core_energy_data

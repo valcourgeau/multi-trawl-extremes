@@ -38,21 +38,47 @@ GetColStartingWith <-  function(data, tags, return.filters=F){
 }
 
 
+#'
+#' @param data dataset
+#' @param ignore_tags Vector of colname tags to remove/ignore.
+#' @param get_tags Vector of colname tags (incomplete name) to keep.
+#' @param ignore_cols Vector of EXACT colnames to remove/ignore.
+#' @param ignore_data_type Vector of datatypes to remove/ignore, e.g. factor or
+#'   numeric.
+#' @note Ignoring is preferred over keeping columns, conflicts between
+#'   \code{get_tags} and \core{ignore_tags} should be checked accordingly.
 #' @examples cols_to_ignore <- c("datetime", "index.x", "index.y")
 #' types_to_ignore <- c("factor")
 #' tags_to_ignore <- c("humidity",
 #'                     "wind_direction")
-#' 
-#' core_energy_data <- getCoreData(data = energy_weather_merged, 
+#'
+#' core_energy_data <- getCoreData(data = energy_weather_merged,
 #'                                 ignore_tags = tags_to_ignore,
 #'                                 ignore_cols = cols_to_ignore,
 #'                                 ignore_data_type = types_to_ignore)
-getCoreData <- function(data, ignore_tags=c(), ignore_cols=c(), ignore_data_type=c()){
-  return(data[, ignoreColStartingWith(data, ignore_tags, return.filters = T) &
+getCoreData <- function(data, ignore_tags=c(), get_tags=c(), ignore_cols=c(), ignore_data_type=c()){
+  flag <- rep(T, length(colnames(data)))
+  if(length(ignore_tags) > 0){
+    flag <- ignoreColStartingWith(data, ignore_tags, return.filters = T)
+  }
+  if(length(get_tags) > 0){
+    flag <- flag & GetColStartingWith(data, get_tags, return.filters = T)
+  }
+  return(data[, flag &
                 (!colnames(data) %in% ignore_cols) & 
                 !(sapply(data, class) %in% ignore_data_type)])
 }
 
+cols_to_ignore <- c("datetime", "index.x", "index.y")
+types_to_ignore <- c("factor")
+tags_to_ignore <- c("humidity",
+                    "wind_direction")
+
+core_energy_data <- getCoreData(data = energy_weather_merged,
+                                ignore_tags = c(),
+                                get_tags = tags_to_ignore,
+                                ignore_cols = cols_to_ignore,
+                                ignore_data_type = types_to_ignore)
 
 # dates is a vector of datetime
 # data is a vector of data 
