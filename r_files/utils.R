@@ -339,7 +339,7 @@ makeFileName <- function(file_name=NA, tag, extension){
   if(file_name %>% is.na){
     return(paste(makeRdmTimestamp(), tag, extension, sep=""))
   }else{
-    return(paste(file_name, extension, sep=""))
+    return(paste(file_name, tag, extension, sep=""))
   }
 }
 

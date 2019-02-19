@@ -52,20 +52,27 @@ tags_west_coast <- c(
   "Vancouver" ,   "Portland"    , "Francisco"   , "Seattle"   ,   "Angeles"  ,    "Diego"    ,    "Vegas"    ,    "Phoenix",     
   "Albuquerque"  ,"Denver"      , "Antonio")
 
+tags_west_coast_light <- c(
+  "Vancouver" ,   "Portland")
+
 tags_east_coast <- c( "Dallas" ,      "Houston"    ,  "City"      ,   "Minneapolis" , "Louis"    ,   
 "Chicago"  ,    "Nashville" ,   "Indianapolis", "Atlanta"  ,    "Detroit"    ,  "Jacksonville" ,"Charlotte"  ,  "Miami"   ,    
 "Pittsburgh" ,  "Toronto"    ,  "Philadelphia" ,"York"       , "Montreal"   ,  "Boston" ) 
 
-clean_east_data <- core_energy_data <- getCoreData(data = clean_energy_data, 
-                                              ignore_tags = tags_east_coast)
+clean_east_data <- getCoreData(data = clean_energy_data, 
+                               get_tags = tags_east_coast)
 
-clean_west_data <- core_energy_data <- getCoreData(data = clean_energy_data, 
-                                              ignore_tags = tags_west_coast)
+clean_west_data <- getCoreData(data = clean_energy_data, 
+                               get_tags = tags_west_coast)
 
-tron_east <- computeTRON(data = clean_east_data,
-                         p.zeroes = 0.97,
-                         horizons = c(1,2,3,6,12,24,48,72),
+clean_west_light_data <- getCoreData(data = clean_energy_data, 
+                                     get_tags = tags_west_coast_light)
+
+tron_east <- computeTRON(data = clean_west_light_data,
+                         p.zeroes = 0.96,
+                         horizons = c(1,12,72),
                          clusters = 8,
+                         n_samples = 40000,
                          name_matrices_file = "matrix_east",
                          name_vine_file = "vine_east",
                          name_tron_file = "tron_east")
@@ -89,6 +96,7 @@ cont_mat <- makeConditionalMatrices(data = core_energy_data[,100:105],
                                     p.zeroes = 0.95,
                                     horizon = horizon,
                                     clusters_size = rep(5, 6),
+                                    n_samples = 40000,
                                     name = "conditional-mat-test")
 
 cont_mat %>% print
@@ -133,7 +141,7 @@ computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=1
     cat(paste("Horizon", h, "\n"))
     for(i in 1:n_vars){
       cat(paste("--> extreme in", colnames(tron_proba_matrix)[i]), "...")
-      te.st <- RVineSim(RVM = list_vines[[h]][[i]], N = N)
+      te.st <- VineCopula::RVineSim(RVM = list_vines[[h]][[i]], N = N)
       print(paste("min",min(te.st)))
       print(paste("max",min(te.st)))
       
@@ -203,7 +211,7 @@ tron_test <- computeTRON(data = cleaned_data[,100:102],
                         p.zeroes = rep(0.95, 3),
                         horizons = c(1,24),
                         clusters = rep(5, 3),
-                        n_samples = 100000)
+                        n_samples = 40000)
 tron_test[[1]]$mean
 tron_test[[24]]$mean
 

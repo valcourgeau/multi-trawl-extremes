@@ -97,9 +97,13 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=
       
   }
   
-  rownames(val_param) <- colnames(data)
+  cols_names <- colnames(data)
   if(save){
-    rlist::list.save(val_params, 
+    val_params_list <- list()
+    for(i in 1:nrow(val_params)){
+      val_params_list[[cols_names[i]]] <- val_params[i,]
+    }
+    rlist::list.save(val_params_list, 
                      makeFileName(file_name = name, tag = "_params", extension = ".RData") )
   }
   
@@ -233,18 +237,20 @@ computePZero <- function(params){
 #'   0.95).
 #' @param horizons (integer) sequence of selected extreme horizons.
 #' @param clusters_size Extremes cluster size for each marginal.
-#' @param save Logical (flag, default to TRUE). Whether we save the conditonal
+#' @param save Logical (flag, default to FALSE). Whether we save the conditonal
 #'   matrices.
 #' @param n_samples Number of rows selected to create the matrices (from 1 to
 #'   \code{n_samples}).
 #' @param name Filename if the collection of matrices is saved. Default is NA
 #'   (creates a timestamp on filename).
+#' @param optim Logical (flag, default to TRUE). Whether to perform univ model
+#'   optimisation fit on top of MLEs.
 #' @return Double-leveled list with horizons as first set of keys and columns
 #'   indices as second set of keys. E.g. \code{result[[2]][[4]]} would pick the
 #'   second horizon on the 4th variable.
 makeConditionalMatrices <- function(data, p.zeroes,
-                                    horizons, clusters_size, n_samples = length(data[,1]), save=T, 
-                                    name=NA){
+                                    horizons, clusters_size, n_samples = length(data[,1]), 
+                                    save=F, name=NA, optim=T){
   # adapt the size of p.zeroes to the number of cols
   if(length(p.zeroes) == 1){
     p.zeroes <- rep(p.zeroes, length(data[1,]))
@@ -254,7 +260,7 @@ makeConditionalMatrices <- function(data, p.zeroes,
   thres <- getThresholds(data = data, p.exceed = p.zeroes)
   
   params <- findUnivariateParams(data = data, clusters_size = clusters_size, 
-                                 thresholds = thres, name = name)
+                                 thresholds = thres, name = name, save = T, optim = optim) # TODO WARNING save?!
   exceedeances <- makeExceedances(data = data, thresholds = thres, normalize = T)
 
   # TODO refactor
@@ -351,7 +357,7 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
     for(i in 1:n_vars){
       cat("--->", col_names[i], "\n")
       time_proc <- proc.time()[3]
-      list_of_vines_mat[[i]] <- RVineStructureSelect(
+      list_of_vines_mat[[i]] <- VineCopula::RVineStructureSelect(
         data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3, 4), type = 0,
         selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
         trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
@@ -408,19 +414,21 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
                                     getThresholds(data, p.exceed = p.zeroes),
                                   normalize = TRUE)
   
-  # compute the matrices
+  # fit univ models + compute the matrices
   list_of_mat <- makeConditionalMatrices(data = data,
                                          p.zeroes = p.zeroes,
                                          horizons = horizons,
                                          clusters_size = clusters,
                                          n_samples = n_samples,
-                                         name = name,
-                                         save = F)
+                                         name = NA,
+                                         save = F,
+                                         optim = F)
   if(save){
     rlist::list.save(list_of_mat, name_matrices_file) # save
   }
   
   # compute the vines
+  print("Fitting vines:")
   list_vines <- fitExceedancesVines(horizons = horizons, 
                                     list_of_matrix = list_of_mat)
   if(save){
@@ -428,6 +436,7 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
   }
   
   # compute TRON
+  print("Computing TRONs:")
   tron <- computeTRONwithLists(data = data,
                                horizons = horizons,
                                list_vines = list_vines,
