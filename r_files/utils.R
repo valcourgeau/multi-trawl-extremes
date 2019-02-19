@@ -69,16 +69,16 @@ getCoreData <- function(data, ignore_tags=c(), get_tags=c(), ignore_cols=c(), ig
                 !(sapply(data, class) %in% ignore_data_type)])
 }
 
-cols_to_ignore <- c("datetime", "index.x", "index.y")
-types_to_ignore <- c("factor")
-tags_to_ignore <- c("humidity",
-                    "wind_direction")
-
-core_energy_data <- getCoreData(data = energy_weather_merged,
-                                ignore_tags = c(),
-                                get_tags = tags_to_ignore,
-                                ignore_cols = cols_to_ignore,
-                                ignore_data_type = types_to_ignore)
+# cols_to_ignore <- c("datetime", "index.x", "index.y")
+# types_to_ignore <- c("factor")
+# tags_to_ignore <- c("humidity",
+#                     "wind_direction")
+# 
+# core_energy_data <- getCoreData(data = energy_weather_merged,
+#                                 ignore_tags = c(),
+#                                 get_tags = tags_to_ignore,
+#                                 ignore_cols = cols_to_ignore,
+#                                 ignore_data_type = types_to_ignore)
 
 # dates is a vector of datetime
 # data is a vector of data 
@@ -282,7 +282,7 @@ ProcessWindProjections <- function(data, tags){
 ConcatAndReplaceWind <- function(data, tags){
   concat_vals <- ProcessWindProjections(data = data, tags = tags)
   removing_tags_index <- ignoreColStartingWith(data, c("wind_direction", "wind_speed"), return.filters = T)
-  print(removing_tags_index)
+  #print(removing_tags_index)
   concat_vals <- cbind(data[,removing_tags_index], concat_vals)
   return(concat_vals)
 }

@@ -8,6 +8,8 @@ require(stats)
 require(evir)
 source("prep_univariate_latent_trawl_fit.R")
 source("utils.R")
+source("infer_latent_value.R")
+
 
 
 #' Wrapper from \code{ev.trawl} GenerateParameters to fit univariate latent
@@ -110,7 +112,6 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=
   return(val_params)
 }
 
-source("infer_latent_value.R")
 
 #' This function returns the threshold(s) corresponding the quantile of probability p.exceed
 #' @param data cleaned dataset
@@ -357,11 +358,17 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
     for(i in 1:n_vars){
       cat("--->", col_names[i], "\n")
       time_proc <- proc.time()[3]
-      list_of_vines_mat[[i]] <- VineCopula::RVineStructureSelect( # TODO warning include vinecop
-        data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3, 4), type = 0,
-        selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
-        trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
-        se = FALSE, rotations = TRUE, method = "mle", cores = parallel::detectCores()-1)
+      # list_of_vines_mat[[i]] <- VineCopula::RVineStructureSelect( # TODO warning include vinecop
+      #   data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3, 4), type = 0,
+      #   selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
+      #   trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
+      #   se = FALSE, rotations = TRUE, method = "mle", cores = parallel::detectCores()-1)
+      list_of_vines_mat[[i]] <- rvinecopulib::vinecop( # TODO warning include vinecop
+        data = list_of_list_horizons[[h]]$unif.values[[i]],
+        family_set = c("gumbel", "indep", "clayton"),  psi0 = 0.95,
+        selcrit = "mbicv", trunc_lvl = Inf, tree_crit = "tau", threshold = 0,
+        par_method = "mle", cores = parallel::detectCores()-1)
+    
       cat("       |-----> done in", round((proc.time()[3] - time_proc), 2), "s. \n")
     }
     list_of_list_horizons_vines[[h]] <- list_of_vines_mat
@@ -373,7 +380,7 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
   return(list_of_list_horizons_vines)
 }
 
-source("multi_ev.R")
+#source("multi_ev.R")
 #'computeTRON allows to compute TRON probabilities very easily!
 #'@param data clean dataset
 #'@param p.zeroes a scalar or vector (as large as the number of columns of
@@ -446,4 +453,44 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
   }
   return(tron)
 }
+
+
+computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=100000, save=F){
+  tron_probabilities <- list()
+  set.seed(42)
+  n_vars <- length(data[1,])
+  for(h in horizons){
+    tron_proba_matrix <- matrix(0, nrow = n_vars, ncol = n_vars)
+    colnames(tron_proba_matrix) <- colnames(data)
+    rownames(tron_proba_matrix) <- colnames(data)
+    tron_proba_matrix_sd <- tron_proba_matrix
+    cat(paste("Horizon", h, "\n"))
+    for(i in 1:n_vars){
+      cat(paste("--> extreme in", colnames(tron_proba_matrix)[i]), "...")
+      #te.st <- VineCopula::RVineSim(RVM = list_vines[[h]][[i]], N = N)
+      te.st <- rvinecopulib::rvine(vine = list_vines[[h]][[i]], 
+                                   n = N,  
+                                   cores = parallel::detectCores()-1)
+      print(paste("min",min(te.st)))
+      print(paste("max",min(te.st)))
+      
+      te.st <- te.st[,1:(length(te.st[1,])-1)]
+      qq.values <- list_of_matrix[[h]]$quantiles.values[i,]
+      print(qq.values)
+      te.st <- t(apply(te.st, MARGIN = 1, FUN = function(x){x>qq.values}))
+      print(apply(te.st, MARGIN = 2, mean))
+      tron_proba_matrix[i,] <- t(apply(te.st, MARGIN = 2, mean))
+      tron_proba_matrix_sd[i,] <- t(apply(te.st, MARGIN = 2, sd))/sqrt(length(te.st[,1]))
+      cat("\t done\n")
+    }
+    tron_probabilities[[h]] <- list(mean=tron_proba_matrix, sd=tron_proba_matrix_sd)
+  }
+  tron_probabilities[[1]]$mean
+  tron_probabilities[[1]]$sd
+  if(save){
+    list.save(tron_probabilities, file = "tron-cond-test.RData")
+  }
+  return(tron_probabilities)
+}
+
 
