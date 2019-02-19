@@ -357,11 +357,11 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
     for(i in 1:n_vars){
       cat("--->", col_names[i], "\n")
       time_proc <- proc.time()[3]
-      list_of_vines_mat[[i]] <- VineCopula::RVineStructureSelect(
+      list_of_vines_mat[[i]] <- VineCopula::RVineStructureSelect( # TODO warning include vinecop
         data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3, 4), type = 0,
         selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
         trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
-        se = FALSE, rotations = TRUE, method = "mle", cores = 7)
+        se = FALSE, rotations = TRUE, method = "mle", cores = parallel::detectCores()-1)
       cat("       |-----> done in", round((proc.time()[3] - time_proc), 2), "s. \n")
     }
     list_of_list_horizons_vines[[h]] <- list_of_vines_mat

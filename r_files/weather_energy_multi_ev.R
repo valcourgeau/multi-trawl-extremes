@@ -73,9 +73,59 @@ tron_east <- computeTRON(data = clean_west_light_data,
                          horizons = c(1,12,72),
                          clusters = 8,
                          n_samples = 40000,
+                         save = T,
                          name_matrices_file = "matrix_east",
                          name_vine_file = "vine_east",
                          name_tron_file = "tron_east")
+tron_east[[1]]$mean %>% (function(x){round(x,2)})
+tron_east[[12]]$mean %>% (function(x){round(x,2)})
+tron_east[[72]]$mean %>% (function(x){round(x,2)})
+
+rlist::list.load("2019-2-19-13-20-14_params.RData")
+
+vines_fitted <- rlist::list.load("vine_east_vines.RData")
+plot(vines_fitted[[1]][[1]])
+plot(vines_fitted[[1]][[5]])
+
+
+print("Extreme in Pressure.Portland")
+for(h in c(1,12,72)){
+  data_to_print <- tron_east[[h]]$mean[3,]
+  print(data_to_print %>% (function(x){round(x,2)}))
+}
+
+print("Extreme in temperature.Vancouver")
+for(h in c(1,12,72)){
+  data_to_print <- tron_east[[h]]$mean[5,]
+  print(data_to_print %>% (function(x){round(x,2)}))
+}
+
+## Second set of proba
+
+print("Where do the extreme temperature in Vancouver come from?")
+print(do.call(cbind, lapply(c(1,12,72), function(h){tron_east[[h]]$mean[,5]}))) # Look at portland.sin
+
+print("Where do the extreme temperature in Vancouver come from?")
+print(do.call(cbind, lapply(c(1,12,72), function(h){tron_east[[h]]$mean[,8]})))
+
+
+print("Extreme in temperature.Vancouver")
+for(h in c(1,12,72)){
+  data_to_print <- tron_east[[h]]$mean[5,]
+  print(data_to_print %>% (function(x){round(x,2)}))
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -102,6 +152,11 @@ cont_mat <- makeConditionalMatrices(data = core_energy_data[,100:105],
 cont_mat %>% print
 names(cont_mat)
 cont_mat[[1]]$quantiles.values
+
+
+
+
+
 
 
 # Choosing the variables to include
