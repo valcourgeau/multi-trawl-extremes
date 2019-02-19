@@ -16,10 +16,15 @@ source("utils.R")
 #' @param data cleaned dataset.
 #' @param clusters_size Extreme clusters size (integer) vector .
 #' @param thresholds Thresholds values for extremes.
-#' @param optim Logical (default=TRUE). Whether to execute BFGS optimisation with fixed alpha.
+#' @param optim Logical (default=TRUE). Whether to execute BFGS optimisation
+#'   with fixed alpha.
+#' @param name a string for the file name once saved. Default is NA, if NA, it
+#'   creates a timestamp format.
+#' @param save Logical flag (default is TRUE). Whether to save the result as
+#'   .RData.
 #' @return Set of thresholds values as large as \code{data} after which values
 #'   in data are considered extremes.
-findUnivariateParams <- function(data, clusters_size, thresholds, optim=T){
+findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=NA, save=T){
   n_vars <- length(data[1,])
   n_rows <- length(data[,1])
   
@@ -91,6 +96,13 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T){
       }
       
   }
+  
+  rownames(val_param) <- colnames(data)
+  if(save){
+    rlist::list.save(val_params, 
+                     makeFileName(file_name = name, tag = "_params", extension = ".RData") )
+  }
+  
   return(val_params)
 }
 
@@ -225,13 +237,14 @@ computePZero <- function(params){
 #'   matrices.
 #' @param n_samples Number of rows selected to create the matrices (from 1 to
 #'   \code{n_samples}).
-#' @param name Filename if the collection of matrices is saved.
+#' @param name Filename if the collection of matrices is saved. Default is NA
+#'   (creates a timestamp on filename).
 #' @return Double-leveled list with horizons as first set of keys and columns
 #'   indices as second set of keys. E.g. \code{result[[2]][[4]]} would pick the
 #'   second horizon on the 4th variable.
 makeConditionalMatrices <- function(data, p.zeroes,
                                     horizons, clusters_size, n_samples = length(data[,1]), save=T, 
-                                    name="conditional-matrices"){
+                                    name=NA){
   # adapt the size of p.zeroes to the number of cols
   if(length(p.zeroes) == 1){
     p.zeroes <- rep(p.zeroes, length(data[1,]))
@@ -240,7 +253,8 @@ makeConditionalMatrices <- function(data, p.zeroes,
   #p.zeroes <- computePZero(params)
   thres <- getThresholds(data = data, p.exceed = p.zeroes)
   
-  params <- findUnivariateParams(data = data, clusters_size = clusters_size, thresholds = thres)
+  params <- findUnivariateParams(data = data, clusters_size = clusters_size, 
+                                 thresholds = thres, name = name)
   exceedeances <- makeExceedances(data = data, thresholds = thres, normalize = T)
 
   # TODO refactor
@@ -308,8 +322,8 @@ makeConditionalMatrices <- function(data, p.zeroes,
   if(save){
     file_name <- paste(name, ".RData", sep="")
     cat(paste("Backing up the conditional matrices as", file_name, "..."))
-    list.save(list_of_list_horizons,
-              file=file_name)
+    rlist::list.save(list_of_list_horizons,
+                     file=file_name)
     cat("done\n")
   }
   return(list_of_list_horizons)
@@ -348,8 +362,79 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
   }
   
   if(save){
-    list.save(list_of_list_horizons_vines, file = "cond-mat-vines-12361224-v2.RData")
+    rlist::list.save(list_of_list_horizons_vines, file = "cond-mat-vines-12361224-v2.RData")
   }
   return(list_of_list_horizons_vines)
+}
+
+source("multi_ev.R")
+#'computeTRON allows to compute TRON probabilities very easily!
+#'@param data clean dataset
+#'@param p.zeroes a scalar or vector (as large as the number of columns of
+#'  data). of probabilities to be an exceedance of zero (proba of NOT being an
+#'  extreme).
+#'@param horizons a integer or vector (of integers) of look-ahead horizons for
+#'  extremes.
+#'@param clusters a integer or vector (of integers) of clusters size in the
+#'  autocorrelation sense. See \code{\link[ev.trawl]{GenerateParameters}}.
+#'@param n_samples Number of samples to compute the TRON probabilites via
+#'  Monte-Carlo.
+#'@param name_matrices_file Default is NA. If NA, we use \code{makeFileName(NA,
+#'  "_matrix", ".RData")}, otherwise we use \code{name_matrices_file.RData}.
+#'@param name_vine_file Default is NA. If NA, we use \code{makeFileName(NA,
+#'  "_matrix", ".RData")}, otherwise we use \code{name_vine_file.RData}.
+#'@param name_tron_file Default is NA. If NA, we use \code{makeFileName(NA,
+#'  "_matrix", ".RData")}, otherwise we use \code{name_tron_file.RData}.
+#'@param save Logical (default is TRUE) to save matrices, vines and tron
+#'  probabilities as RData files.
+#'@return Returns a list of TRON probabilities with horizons as keys.
+#'@seealso \code{\link[ev.trawl]{GenerateParameters}} for \code{clusters}.
+computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
+                        name_matrices_file=NA, name_vine_file=NA, 
+                        name_tron_file=NA, save=TRUE){
+  name_matrices_file <- makeFileName(name_matrices_file, 
+                                     tag = "_matrix",
+                                     extension = ".RData")
+  name_vine_file <- makeFileName(name_vine_file, 
+                                 tag = "_vines",
+                                 extension = ".RData")
+  name_tron_file <- makeFileName(name_tron_file, 
+                                 tag = "_tron",
+                                 extension = ".RData")
+  
+  # Univariate parameters
+  exceendances <- makeExceedances(data = data,
+                                  thresholds = 
+                                    getThresholds(data, p.exceed = p.zeroes),
+                                  normalize = TRUE)
+  
+  # compute the matrices
+  list_of_mat <- makeConditionalMatrices(data = data,
+                                         p.zeroes = p.zeroes,
+                                         horizons = horizons,
+                                         clusters_size = clusters,
+                                         n_samples = n_samples,
+                                         name = name,
+                                         save = F)
+  if(save){
+    rlist::list.save(list_of_mat, name_matrices_file) # save
+  }
+  
+  # compute the vines
+  list_vines <- fitExceedancesVines(horizons = horizons, 
+                                    list_of_matrix = list_of_mat)
+  if(save){
+    rlist::list.save(list_vines, name_vine_file) #save
+  }
+  
+  # compute TRON
+  tron <- computeTRONwithLists(data = data,
+                               horizons = horizons,
+                               list_vines = list_vines,
+                               list_of_matrix = list_of_mat)
+  if(save){
+    rlist::list.save(tron, name_tron_file) # save
+  }
+  return(tron)
 }
 

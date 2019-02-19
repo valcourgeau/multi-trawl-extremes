@@ -242,19 +242,17 @@ ExtractProcessWindData <- function(data, tag){
 #' @examples 
 #' ProcessWindProjections(data = energy_weather_merged, c("New.York", "Detroit")) %>% head
 ProcessWindProjections <- function(data, tags){
-  return(do.call(cbind, 
-                 lapply(tags, function(x){
+  return(
+    do.call(cbind, 
+            lapply(tags, function(x){
                                 ExtractProcessWindData(data = data,
-                                                       tag = x)
-                              }
-                   )
-                 )
-         )
+                                                       tag = x)})
+            )
+        )
 }
 
 #' @examples
 #' ConcatAndReplaceWind(energy_weather_merged, c("New.York", "Houston")) %>% colnames
-
 ConcatAndReplaceWind <- function(data, tags){
   concat_vals <- ProcessWindProjections(data = data, tags = tags)
   removing_tags_index <- ignoreColStartingWith(data, c("wind_direction", "wind_speed"), return.filters = T)
@@ -293,6 +291,14 @@ makeRdmTimestamp <- function(){
 
 makeRdmTimestamp()
 
+#' Returns the list of cities in the column names.
+#' @param column_names collection of strings
+#' @return List of cities
+GetCityNames <- function(data){
+  sol <- colnames(data)[!grepl(pattern = "_", colnames(data))]
+  return(unique(sub('.*\\.', '', sol)))
+}
+
 #' Allows user to create a filename using a main filename,
 #' a tag and an extension.
 #' @param file_name Main name of the file. If not given, replaced 
@@ -305,13 +311,13 @@ makeRdmTimestamp()
 #' makeFileName(tag="tag", extension=".csv") #returns makeRdmTimestamp + "tag.csv".
 makeFileName <- function(file_name=NA, tag, extension){
   if(file_name %>% is.na){
-    return(paste(makeRdmTimestamp(), tag, ".RData", sep=""))
+    return(paste(makeRdmTimestamp(), tag, extension, sep=""))
   }else{
-    return(paste(file_name, ".RData", sep=""))
+    return(paste(file_name, extension, sep=""))
   }
 }
 
-makeFileName("ok", "_matrix", "RData")
+makeFileName("ok", "_matrix", ".RData")
 
 
 #' A wrapper for the automated threshold selection from Bader et al. (2018).

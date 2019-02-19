@@ -35,18 +35,43 @@ core_energy_data <- getCoreData(data = energy_weather_merged,
                     ignore_tags = tags_to_ignore,
                     ignore_cols = cols_to_ignore,
                     ignore_data_type = types_to_ignore)
-tags_to_collect <- colnames(core_energy_data)[!grepl(pattern = "_", colnames(core_energy_data))]
-# core_energy_data <- ConcatAndReplaceWind(energy_weather_merged, 
-#                                          tags = c("New.York", "Detroit"))
+
+# Now ew process the wind data
+tags_to_collect <- GetCityNames(core_energy_data)
 core_energy_data <- ConcatAndReplaceWind(core_energy_data, 
-                                         tags = unique(sub('.*\\.', '', tags_to_collect)))
+                                         tags=tags_to_collect)
 dim(energy_weather_merged)
 dim(core_energy_data)
 
 # dates is a vector of datetime
 # data is a vector of data 
 
-core_energy_data <- datasetCleaning(data = core_energy_data, dates = dates)
+clean_energy_data <- datasetCleaning(data = core_energy_data, dates = dates)
+
+tags_west_coast <- c(
+  "Vancouver" ,   "Portland"    , "Francisco"   , "Seattle"   ,   "Angeles"  ,    "Diego"    ,    "Vegas"    ,    "Phoenix",     
+  "Albuquerque"  ,"Denver"      , "Antonio")
+
+tags_east_coast <- c( "Dallas" ,      "Houston"    ,  "City"      ,   "Minneapolis" , "Louis"    ,   
+"Chicago"  ,    "Nashville" ,   "Indianapolis", "Atlanta"  ,    "Detroit"    ,  "Jacksonville" ,"Charlotte"  ,  "Miami"   ,    
+"Pittsburgh" ,  "Toronto"    ,  "Philadelphia" ,"York"       , "Montreal"   ,  "Boston" ) 
+
+clean_east_data <- core_energy_data <- getCoreData(data = clean_energy_data, 
+                                              ignore_tags = tags_east_coast)
+
+clean_west_data <- core_energy_data <- getCoreData(data = clean_energy_data, 
+                                              ignore_tags = tags_west_coast)
+
+tron_east <- computeTRON(data = clean_east_data,
+                         p.zeroes = 0.97,
+                         horizons = c(1,2,3,6,12,24,48,72),
+                         clusters = 8,
+                         name_matrices_file = "matrix_east",
+                         name_vine_file = "vine_east",
+                         name_tron_file = "tron_east")
+
+
+
 
 
 setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
