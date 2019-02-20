@@ -149,7 +149,7 @@ getThresholds <- function(data, p.exceed){
   }
 }
 
-getThresholds(core_energy_data[,1:3], c(0.1,0.5,0.8))
+#getThresholds(core_energy_data[,1:20], 0.95)
 
 #' Wrapper to makeMatrix in the special case of extreme value thresholds.
 #' We consider p.exceed as the threshold cut-off probability.
@@ -259,6 +259,8 @@ makeConditionalMatrices <- function(data, p.zeroes,
   
   #p.zeroes <- computePZero(params)
   thres <- getThresholds(data = data, p.exceed = p.zeroes)
+  print("thres")
+  print(thres)
   
   params <- findUnivariateParams(data = data, clusters_size = clusters_size, 
                                  thresholds = thres, name = name, save = T, optim = optim) # TODO WARNING save?!
@@ -341,9 +343,11 @@ makeConditionalMatrices <- function(data, p.zeroes,
 #'   \code{makeConditionalMatrices}).
 #' @param save Logical (flag, default to TRUE). Whether we save the conditonal
 #'   matrices.
+#' @param sparse Logical flag (default is FALSE). Whether to perform mBICV 
+#' sparse vine computation. 
 #' @seealso \code{makeConditionalMatrices}.
 #' @examples fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
-fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
+fitExceedancesVines <- function(horizons, list_of_matrix, save=F, sparse=F){
   #list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
   paste("nvars?", length(list_of_matrix[[horizons[1]]]$unif.values[[1]][1,])) %>% print
   list_of_list_horizons <- list_of_matrix
@@ -358,17 +362,19 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
     for(i in 1:n_vars){
       cat("--->", col_names[i], "\n")
       time_proc <- proc.time()[3]
-      # list_of_vines_mat[[i]] <- VineCopula::RVineStructureSelect( # TODO warning include vinecop
-      #   data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3, 4), type = 0,
-      #   selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
-      #   trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
-      #   se = FALSE, rotations = TRUE, method = "mle", cores = parallel::detectCores()-1)
-      list_of_vines_mat[[i]] <- rvinecopulib::vinecop( # TODO warning include vinecop
-        data = list_of_list_horizons[[h]]$unif.values[[i]],
-        family_set = c("gumbel", "indep", "clayton"),  psi0 = 0.95,
-        selcrit = "mbicv", trunc_lvl = Inf, tree_crit = "tau", threshold = 0,
-        par_method = "mle", cores = parallel::detectCores()-1)
-    
+      if(sparse){
+        list_of_vines_mat[[i]] <- rvinecopulib::vinecop( # TODO warning include vinecop
+          data = list_of_list_horizons[[h]]$unif.values[[i]],
+          family_set = c("gumbel", "indep", "clayton"),  psi0 = 0.95,
+          selcrit = "mbicv", trunc_lvl = Inf, tree_crit = "tau", threshold = 0,
+          par_method = "mle", cores = parallel::detectCores()-1)
+      }else{
+        list_of_vines_mat[[i]] <- VineCopula::RVineStructureSelect( # TODO warning include vinecop
+          data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3, 4), type = 0,
+          selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
+          trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
+          se = FALSE, rotations = TRUE, method = "mle", cores = parallel::detectCores()-1)
+      }
       cat("       |-----> done in", round((proc.time()[3] - time_proc), 2), "s. \n")
     }
     list_of_list_horizons_vines[[h]] <- list_of_vines_mat
@@ -400,11 +406,14 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F){
 #'  "_matrix", ".RData")}, otherwise we use \code{name_tron_file.RData}.
 #'@param save Logical (default is TRUE) to save matrices, vines and tron
 #'  probabilities as RData files.
+#'@param sparse Logical flag (default is FALSE). Whether to perform mBICV 
+#'  sparse vine computation. 
 #'@return Returns a list of TRON probabilities with horizons as keys.
-#'@seealso \code{\link[ev.trawl]{GenerateParameters}} for \code{clusters}.
+#'@seealso \code{\link[ev.trawl]{GenerateParameters}} for \code{clusters} and 
+#'  paper sparse vine computation \link{https://arxiv.org/abs/1801.09739}.
 computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
                         name_matrices_file=NA, name_vine_file=NA, 
-                        name_tron_file=NA, save=TRUE){
+                        name_tron_file=NA, save=TRUE, sparse=FALSE){
   name_matrices_file <- makeFileName(name_matrices_file, 
                                      tag = "_matrix",
                                      extension = ".RData")
@@ -415,12 +424,21 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
                                  tag = "_tron",
                                  extension = ".RData")
   
+ 
+  
   # Univariate parameters
+  # print("getThresholds")
+  # if(length(p.zeroes) == 1){
+  #   p.zeroes <- rep(p.zeroes, length(data[1,]))
+  # }
+  # print(getThresholds(data, p.exceed = p.zeroes))
+  # print("makeExceedances")
   exceendances <- makeExceedances(data = data,
                                   thresholds = 
                                     getThresholds(data, p.exceed = p.zeroes),
                                   normalize = TRUE)
   
+  #print("makeConditionalMatrices")
   # fit univ models + compute the matrices
   list_of_mat <- makeConditionalMatrices(data = data,
                                          p.zeroes = p.zeroes,
@@ -437,7 +455,8 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
   # compute the vines
   print("Fitting vines:")
   list_vines <- fitExceedancesVines(horizons = horizons, 
-                                    list_of_matrix = list_of_mat)
+                                    list_of_matrix = list_of_mat,
+                                    sparse = sparse)
   if(save){
     rlist::list.save(list_vines, name_vine_file) #save
   }
@@ -447,15 +466,28 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
   tron <- computeTRONwithLists(data = data,
                                horizons = horizons,
                                list_vines = list_vines,
-                               list_of_matrix = list_of_mat)
+                               list_of_matrix = list_of_mat,
+                               sparse = sparse)
   if(save){
     rlist::list.save(tron, name_tron_file) # save
   }
   return(tron)
 }
 
-
-computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=100000, save=F){
+#' @param data dataset.
+#' @param horizons (integer) sequence of selected extreme horizons.
+#' @param list_vines Collection of vines as created by
+#'   \code{fitExceedancesVines}.
+#' @param list_of_matrix Collection of conditional matrices (as created by
+#'   \code{makeConditionalMatrices}).
+#' @param N number of samples to estimate TRON probabilities.
+#' @param save Logical (flag, default to TRUE). Whether we save the conditonal
+#'   matrices.
+#' @param sparse Logical flag (default is FALSE). Whether to perform mBICV
+#'   sparse vine computation.
+#' @seealso \code{makeConditionalMatrices} and \code{fitExceedancesVines}.
+#' @examples fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
+computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=100000, save=F, sparse=F){
   tron_probabilities <- list()
   set.seed(42)
   n_vars <- length(data[1,])
@@ -467,10 +499,14 @@ computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=1
     cat(paste("Horizon", h, "\n"))
     for(i in 1:n_vars){
       cat(paste("--> extreme in", colnames(tron_proba_matrix)[i]), "...")
-      #te.st <- VineCopula::RVineSim(RVM = list_vines[[h]][[i]], N = N)
-      te.st <- rvinecopulib::rvine(vine = list_vines[[h]][[i]], 
-                                   n = N,  
-                                   cores = parallel::detectCores()-1)
+      if(sparse){
+        te.st <- rvinecopulib::rvinecop(vine = list_vines[[h]][[i]], 
+                                        n = N,  
+                                        cores = parallel::detectCores()-1)
+      }else{
+        te.st <- VineCopula::RVineSim(RVM = list_vines[[h]][[i]], N = N)
+      }
+      
       print(paste("min",min(te.st)))
       print(paste("max",min(te.st)))
       

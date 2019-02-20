@@ -6,8 +6,8 @@ require(magrittr)
 require(rlist)
 
 setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
-source("multi_ev.R")
 source("utils.R")
+source("multi_ev.R")
 
 # loading data
 merged_dataset_folder <- "C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/data/merged-datasets/"
@@ -49,11 +49,11 @@ dim(core_energy_data)
 clean_energy_data <- datasetCleaning(data = core_energy_data, dates = dates)
 
 tags_west_coast <- c(
-  "Vancouver" ,   "Portland"    , "Francisco"   , "Seattle"   ,   "Angeles"  ,    "Diego"    ,    "Vegas"    ,    "Phoenix",     
+  "Vancouver" ,   "Portland"    , "Seattle"   ,   "Angeles"  ,    "Diego"    ,    "Vegas"    ,    "Phoenix",  "Francisco"   ,
   "Albuquerque"  ,"Denver"      , "Antonio")
 
 tags_west_coast_light <- c(
-  "Vancouver" ,   "Portland")
+  "Vancouver" ,   "Portland", "Seattle"   ,   "Angeles")
 
 tags_east_coast <- c( "Dallas" ,      "Houston"    ,  "City"      ,   "Minneapolis" , "Louis"    ,   
 "Chicago"  ,    "Nashville" ,   "Indianapolis", "Atlanta"  ,    "Detroit"    ,  "Jacksonville" ,"Charlotte"  ,  "Miami"   ,    
@@ -61,26 +61,31 @@ tags_east_coast <- c( "Dallas" ,      "Houston"    ,  "City"      ,   "Minneapol
 
 clean_east_data <- getCoreData(data = clean_energy_data, 
                                get_tags = tags_east_coast)
-
+save(clean_east_data, file = "clean_east_data")
 clean_west_data <- getCoreData(data = clean_energy_data, 
                                get_tags = tags_west_coast)
-
+save(clean_west_data, file="clean_west_data")
 clean_west_light_data <- getCoreData(data = clean_energy_data, 
                                      get_tags = tags_west_coast_light)
 
-tron_east <- computeTRON(data = clean_west_light_data,
-                         p.zeroes = 0.96,
-                         horizons = c(1,12,72),
-                         clusters = 8,
+finding_out_horizons <- makeExceedances(clean_west_light_data, getThresholds(clean_west_light_data,0.95))
+acf(finding_out_horizons[,1])
+
+tron_west <- computeTRON(data = clean_west_light_data,
+                         p.zeroes = 0.95,
+                         horizons = c(1,2,3,4),
+                         clusters = 10,
                          n_samples = 40000,
                          save = T,
-                         name_matrices_file = "matrix_east",
-                         name_vine_file = "vine_east",
-                         name_tron_file = "tron_east")
-tron_east[[1]]$mean %>% (function(x){round(x,2)})
-tron_east[[12]]$mean %>% (function(x){round(x,2)})
-tron_east[[72]]$mean %>% (function(x){round(x,2)})
+                         sparse = F,
+                         name_matrices_file = "matrix_west_light",
+                         name_vine_file = "vine_west_light",
+                         name_tron_file = "tron_west_light")
+tron_west[[1]]$mean %>% (function(x){round(x,2)})
+tron_west[[12]]$mean %>% (function(x){round(x,2)})
+tron_west[[72]]$mean %>% (function(x){round(x,2)})
 
+rlist::list.load("2019-2-20-9-4-51_params.RData")
 rlist::list.load("2019-2-19-13-20-14_params.RData")
 
 vines_fitted <- rlist::list.load("vine_east_vines.RData")

@@ -187,7 +187,33 @@ DeterministicCleaningSequential <- function(dates, data,
 
 
 #' @param data cleaned dataset
+#' @param frequency frequency of sampling of underlying timeseries per unit of
+#'   time (hourly data, frequency = 24).
+#' @param trend_window window to look for trends in STL algorithm.
+#' @param season_window  window to look for seasonality in STL algorithm.
+#' @seealso \code{\link[stats]{stl}}.
+#' @examples
+#' datasetSTLCleaning(data = core_energy_data,
+#'                           frequency=24,
+#'                           trend_window=24*365/4,
+#'                           season_window=24)
+datasetSTLCleaning <- function(data, frequency, trend_window, season_window){
+  result <- apply(data, MARGIN=2,
+                  FUN = function(x){
+                    return(stl(ts(x, frequency = frequency), 
+                               t.window = trend_window, 
+                               s.window = season_window)$time.series[,3] %>% as.vector)
+                  })
+  result <- data.frame(result)
+  colnames(result) <- colnames(data)
+  return(result)
+}
+
+#' @param data cleaned dataset
 #' @param dates vector of numerical dates (timestamps)
+#' @param frequenc frequency of sampling of underlying timeseries per unit of
+#'   time (hourly data, frequency = 24).
+#' @param 
 #' @param sequential Logical flag (default = TRUE). Whether to use the
 #'   sequential creation of fitting matrix with wday, month, quarter, hour,
 #'   seasons of 12, 24, 48 and 24*365.
@@ -195,7 +221,10 @@ DeterministicCleaningSequential <- function(dates, data,
 #' test <- datasetCleaning(data = core_energy_data,
 #'                         dates = energy_weather_merged$datetime)
 datasetCleaning <- function(data, dates, sequential=T){
-  result <- apply(data, MARGIN = 2, 
+  
+  
+  #we apply linear modelling cleaning on all columns
+  result <- data(result, MARGIN = 2, 
                   FUN = function(x){
                     if(sequential){
                       DeterministicCleaningSequential(data = x, dates = dates,
