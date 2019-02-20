@@ -45,8 +45,11 @@ dim(core_energy_data)
 
 # dates is a vector of datetime
 # data is a vector of data 
-
-clean_energy_data <- datasetCleaning(data = core_energy_data, dates = dates)
+clean_energy_data <- datasetSTLCleaning(data = core_energy_data, 
+                                        frequency = 24,
+                                        trend_window = 24*365/4,
+                                        season_window = 24)
+clean_energy_data <- datasetCleaning(data = clean_energy_data, dates = dates)
 
 tags_west_coast <- c(
   "Vancouver" ,   "Portland"    , "Seattle"   ,   "Angeles"  ,    "Diego"    ,    "Vegas"    ,    "Phoenix",  "Francisco"   ,
@@ -69,7 +72,7 @@ clean_west_light_data <- getCoreData(data = clean_energy_data,
                                      get_tags = tags_west_coast_light)
 
 finding_out_horizons <- makeExceedances(clean_west_light_data, getThresholds(clean_west_light_data,0.95))
-acf(finding_out_horizons[,1])
+acf(finding_out_horizons[,18], lag.max = 70)
 
 tron_west <- computeTRON(data = clean_west_light_data,
                          p.zeroes = 0.95,

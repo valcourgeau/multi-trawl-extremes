@@ -195,8 +195,8 @@ DeterministicCleaningSequential <- function(dates, data,
 #' @examples
 #' datasetSTLCleaning(data = core_energy_data,
 #'                           frequency=24,
-#'                           trend_window=24*365/4,
-#'                           season_window=24)
+#'                           trend_window=24*365/4, # quartly trend changes
+#'                           season_window=24) # daily seasonality
 datasetSTLCleaning <- function(data, frequency, trend_window, season_window){
   result <- apply(data, MARGIN=2,
                   FUN = function(x){
@@ -406,3 +406,27 @@ ChoosingThresholds <- function(data, p.zeroes){
   
   return(tests_results)
 }
+
+
+#' A function that returns a first guess for cluster size based on monotonicity of the autocorrelation function and
+#' @param data dataset (vector or matrix)
+#' @param p.zeroes scalar or vector (to the length of \code{data}) of
+#'   probability of NOT having an extreme value (or threshold probability)
+#' @return vector of cluster size respectively for each column.
+ChoosingClusters <- function(data, p.zeroes){
+  lag_max <- min(150, length(data[,1])/100)
+  acf_min <- 0.3
+  exc_data <- makeExceedances(data = data, 
+                              thresholds = getThresholds(data,p.zeroes))
+  clusters_tmp <- apply(exc_data, MARGIN = 2,
+                    FUN = function(x){
+                      acf_data <- acf(x, lag.max = lag_max, plot = F)$acf
+                      first_increase <-  which.max(diff(acf_data) > 0)
+                      if(first_increase == 1){
+                        first_increase <- lag_max
+                      }
+                      return(min(first_increase, which.max(acf_data < acf_min)))
+                    })
+  return(clusters_tmp)
+}
+ChoosingClusters(clean_west_light_data, 0.95)
