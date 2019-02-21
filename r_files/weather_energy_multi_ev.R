@@ -71,13 +71,16 @@ save(clean_west_data, file="clean_west_data")
 clean_west_light_data <- getCoreData(data = clean_energy_data, 
                                      get_tags = tags_west_coast_light)
 
-finding_out_horizons <- makeExceedances(clean_west_light_data, getThresholds(clean_west_light_data,0.95))
-acf(finding_out_horizons[,18], lag.max = 70)
+
+p.zeroes_guess <- 0.95
+clusters_guess <- ChoosingClusters(clean_west_light_data, p.zeroes_guess)
+horizons_guess <- c(1,2,3,4)
+
 
 tron_west <- computeTRON(data = clean_west_light_data,
-                         p.zeroes = 0.95,
-                         horizons = c(1,2,3,4),
-                         clusters = 10,
+                         p.zeroes = p.zeroes_guess,
+                         horizons = horizons_guess,
+                         clusters = clusters_guess,
                          n_samples = 40000,
                          save = T,
                          sparse = F,
@@ -85,11 +88,10 @@ tron_west <- computeTRON(data = clean_west_light_data,
                          name_vine_file = "vine_west_light",
                          name_tron_file = "tron_west_light")
 tron_west[[1]]$mean %>% (function(x){round(x,2)})
-tron_west[[12]]$mean %>% (function(x){round(x,2)})
-tron_west[[72]]$mean %>% (function(x){round(x,2)})
+tron_west[[2]]$mean %>% (function(x){round(x,2)})
+tron_west[[3]]$mean %>% (function(x){round(x,2)})
 
-rlist::list.load("2019-2-20-9-4-51_params.RData")
-rlist::list.load("2019-2-19-13-20-14_params.RData")
+rlist::list.load("2019-2-20-11-47-20_params.RData")
 
 vines_fitted <- rlist::list.load("vine_east_vines.RData")
 install.packages('ggraph')
@@ -99,24 +101,24 @@ plot(vines_fitted[[1]][[5]], var_names = 'legend')
 
 
 print("Extreme in Pressure.Portland")
-for(h in c(1,12,72)){
-  data_to_print <- tron_east[[h]]$mean[3,]
+for(h in horizons_guess){
+  data_to_print <- tron_west[[h]]$mean[3,]
   print(data_to_print %>% (function(x){round(x,2)}))
 }
 
 print("Extreme in temperature.Vancouver")
-for(h in c(1,12,72)){
-  data_to_print <- tron_east[[h]]$mean[5,]
+for(h in horizons_guess){
+  data_to_print <- tron_west[[h]]$mean[5,]
   print(data_to_print %>% (function(x){round(x,2)}))
 }
 
 ## Second set of proba
 
-print("Where do the extreme temperature in Vancouver come from?")
-print(do.call(cbind, lapply(c(1,12,72), function(h){tron_east[[h]]$mean[,5]}))) # Look at portland.sin
+paste("Where do the extreme in", colnames(clean_west_light_data)[9], "come from?")
+print(do.call(cbind, lapply(horizons_guess, function(h){tron_west[[h]]$mean[,9]}))) # Look at portland.sin
 
-print("Where do the extreme sin wind speed come from?")
-print(do.call(cbind, lapply(c(1,12,72), function(h){tron_east[[h]]$mean[,8]})))
+paste("Where do the extreme in", colnames(clean_west_light_data)[10], "come from?")
+print(do.call(cbind, lapply(horizons_guess, function(h){tron_west[[h]]$mean[,10]})))
 
 
 

@@ -386,6 +386,9 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F, sparse=F){
   return(list_of_list_horizons_vines)
 }
 
+
+
+
 #source("multi_ev.R")
 #'computeTRON allows to compute TRON probabilities very easily!
 #'@param data clean dataset

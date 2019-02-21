@@ -415,7 +415,7 @@ ChoosingThresholds <- function(data, p.zeroes){
 #' @return vector of cluster size respectively for each column.
 ChoosingClusters <- function(data, p.zeroes){
   lag_max <- min(150, length(data[,1])/100)
-  acf_min <- 0.3
+  acf_min <- 0.2
   exc_data <- makeExceedances(data = data, 
                               thresholds = getThresholds(data,p.zeroes))
   clusters_tmp <- apply(exc_data, MARGIN = 2,
@@ -429,4 +429,4 @@ ChoosingClusters <- function(data, p.zeroes){
                     })
   return(clusters_tmp)
 }
-ChoosingClusters(clean_west_light_data, 0.95)
+
