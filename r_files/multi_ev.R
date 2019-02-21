@@ -445,21 +445,11 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
                                  tag = "_tron",
                                  extension = ".RData")
   
- 
-  
-  # Univariate parameters
-  # print("getThresholds")
-  # if(length(p.zeroes) == 1){
-  #   p.zeroes <- rep(p.zeroes, length(data[1,]))
-  # }
-  # print(getThresholds(data, p.exceed = p.zeroes))
-  # print("makeExceedances")
   exceendances <- makeExceedances(data = data,
                                   thresholds = 
                                     getThresholds(data, p.exceed = p.zeroes),
                                   normalize = TRUE)
   
-  #print("makeConditionalMatrices")
   # fit univ models + compute the matrices
   list_of_mat <- makeConditionalMatrices(data = data,
                                          p.zeroes = p.zeroes,
@@ -477,6 +467,7 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
   print("Fitting vines:")
   list_vines <- fitExceedancesVines(horizons = horizons, 
                                     list_of_matrix = list_of_mat,
+                                    save = F,
                                     sparse = sparse)
   if(save){
     rlist::list.save(list_vines, name_vine_file) #save
@@ -495,6 +486,38 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
   return(tron)
 }
 
+
+#' @param list_vines Fitted (single) vine as created by
+#'   \code{fitExceedancesVines}.
+#' @param list_of_matrix Collection of conditional matrices (as created by
+#'   \code{makeConditionalMatrices}).
+#' @param N number of samples to estimate TRON probabilities.
+#' @param sparse Logical flag (default is FALSE). Whether to perform mBICV
+#'   sparse vine computation.
+#' @seealso \code{makeConditionalMatrices} and \code{fitExceedancesVines}.
+#' @examples TODO WARNING
+computeTRONwithListSingle <- function(vine, quantile_values, N){
+  if(sparse){
+    te.st <- rvinecopulib::rvinecop(vine = vine, 
+                                    n = N,  
+                                    cores = parallel::detectCores()-1)
+  }else{
+    te.st <- VineCopula::RVineSim(RVM = list_vines[[h]][[i]], N = N)
+  }
+  
+  te.st <- te.st[,1:(length(te.st[1,])-1)]
+  qq.values <- quantile_values
+  te.st <- t(apply(te.st, MARGIN = 1, FUN = function(x){x>qq.values}))
+  
+  # exporting mean and sd
+  results <- list()
+  results[["mean"]] <- t(apply(te.st, MARGIN = 2, mean))
+  results[["sd"]] <- t(apply(te.st, MARGIN = 2, sd))/sqrt(length(te.st[,1]))
+  
+  return(results)
+}
+
+
 #' @param data dataset.
 #' @param horizons (integer) sequence of selected extreme horizons.
 #' @param list_vines Collection of vines as created by
@@ -507,7 +530,7 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
 #' @param sparse Logical flag (default is FALSE). Whether to perform mBICV
 #'   sparse vine computation.
 #' @seealso \code{makeConditionalMatrices} and \code{fitExceedancesVines}.
-#' @examples fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
+#' @examples TODO WARNING
 computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=100000, save=F, sparse=F){
   tron_probabilities <- list()
   set.seed(42)
@@ -520,24 +543,14 @@ computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=1
     cat(paste("Horizon", h, "\n"))
     for(i in 1:n_vars){
       cat(paste("--> extreme in", colnames(tron_proba_matrix)[i]), "...")
-      if(sparse){
-        te.st <- rvinecopulib::rvinecop(vine = list_vines[[h]][[i]], 
-                                        n = N,  
-                                        cores = parallel::detectCores()-1)
-      }else{
-        te.st <- VineCopula::RVineSim(RVM = list_vines[[h]][[i]], N = N)
-      }
       
-      print(paste("min",min(te.st)))
-      print(paste("max",min(te.st)))
-      
-      te.st <- te.st[,1:(length(te.st[1,])-1)]
-      qq.values <- list_of_matrix[[h]]$quantiles.values[i,]
-      print(qq.values)
-      te.st <- t(apply(te.st, MARGIN = 1, FUN = function(x){x>qq.values}))
-      print(apply(te.st, MARGIN = 2, mean))
-      tron_proba_matrix[i,] <- t(apply(te.st, MARGIN = 2, mean))
-      tron_proba_matrix_sd[i,] <- t(apply(te.st, MARGIN = 2, sd))/sqrt(length(te.st[,1]))
+      vine_sim_statistics <- 
+        computeTRONwithListSingle(
+                                vine = list_vines[[h]][[i]],
+                                quantile_values = list_of_matrix[[h]]$quantiles.values[i,],
+                                n_samples = N)
+      tron_proba_matrix[i,] <- vine_sim_statistics$mean
+      tron_proba_matrix_sd[i,] <- vine_sim_statistics$sd
       cat("\t done\n")
     }
     tron_probabilities[[h]] <- list(mean=tron_proba_matrix, sd=tron_proba_matrix_sd)
