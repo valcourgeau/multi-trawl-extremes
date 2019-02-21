@@ -262,10 +262,12 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
     p.zeroes <- rep(p.zeroes, n_vars)
   }
   
-  if(length(conditional_on) == 1 & is.na(conditional_on)){
-    conditional_on <- 1:n_vars
+  if(length(conditional_on) == 1){
+    if(is.na(conditional_on)){
+      conditional_on <- 1:n_vars
+    }
   }else{
-    if(any(!(conditional_on %>% is.integer))){
+    if(any(!vapply(conditional_on, FUN = is.numeric, FUN.VALUE = T))){
       stop('conditional_on should be a list of column indices to select from.')
     }
     if(any(conditional_on < 1) | any(conditional_on > n_vars)){
@@ -569,10 +571,14 @@ computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=1
     rownames(tron_proba_matrix) <- colnames(data)
     tron_proba_matrix_sd <- tron_proba_matrix
     cat(paste("Horizon", h, "\n"))
-    for(i in 1:n_vars){
-      current_vine <- list_vines[[h]][[i]]
-      current_quantiles <- list_of_matrix[[h]]$quantiles.values[i,]
+    #for(i in 1:n_vars){
+    i <- 1
+    actual_conditional <- c()
+    for(current_vine in list_vines[[h]]){
       if(!is.null(current_vine)){
+        actual_conditional <- c(actual_conditional, i)
+      #current_vine <- list_vines[[h]][[i]]
+        current_quantiles <- list_of_matrix[[h]]$quantiles.values[i,]
         cat(paste("--> extreme in", colnames(tron_proba_matrix)[i]), "...")
         
         vine_sim_statistics <- 
@@ -585,8 +591,9 @@ computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=1
         tron_proba_matrix_sd[i,] <- vine_sim_statistics$sd
         cat("\t done\n")
       }
+      i <- i + 1
     }
-    tron_probabilities[[h]] <- list(mean=tron_proba_matrix, sd=tron_proba_matrix_sd)
+    tron_probabilities[[h]] <- list(mean=tron_proba_matrix[actual_conditional,], sd=tron_proba_matrix_sd[actual_conditional,])
   }
   # tron_probabilities[[1]]$mean
   # tron_probabilities[[1]]$sd
