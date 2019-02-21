@@ -362,19 +362,9 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F, sparse=F){
     for(i in 1:n_vars){
       cat("--->", col_names[i], "\n")
       time_proc <- proc.time()[3]
-      if(sparse){
-        list_of_vines_mat[[i]] <- rvinecopulib::vinecop( # TODO warning include vinecop
-          data = list_of_list_horizons[[h]]$unif.values[[i]],
-          family_set = c("gumbel", "indep", "clayton"),  psi0 = 0.95,
-          selcrit = "mbicv", trunc_lvl = Inf, tree_crit = "tau", threshold = 0,
-          par_method = "mle", cores = parallel::detectCores()-1)
-      }else{
-        list_of_vines_mat[[i]] <- VineCopula::RVineStructureSelect( # TODO warning include vinecop
-          data = list_of_list_horizons[[h]]$unif.values[[i]], familyset = c(3, 4), type = 0,
-          selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
-          trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
-          se = FALSE, rotations = TRUE, method = "mle", cores = parallel::detectCores()-1)
-      }
+      list_of_vines_mat[[i]] <- fitExceedancesSingleVine(data_matrix = 
+                                                           list_of_list_horizons[[h]]$unif.values[[i]],
+                                                         save = save, sparse = sparse)
       cat("       |-----> done in", round((proc.time()[3] - time_proc), 2), "s. \n")
     }
     list_of_list_horizons_vines[[h]] <- list_of_vines_mat
@@ -386,6 +376,34 @@ fitExceedancesVines <- function(horizons, list_of_matrix, save=F, sparse=F){
   return(list_of_list_horizons_vines)
 }
 
+
+#' @param data_matrix Collection of conditional matrices (as created by
+#'   \code{makeConditionalMatrices}), for one specific horizon and one
+#'   conditional variable.
+#' @param save Logical (flag, default to TRUE). Whether we save the conditonal
+#'   matrices.
+#' @param sparse Logical flag (default is FALSE). Whether to perform mBICV
+#'   sparse vine computation.
+#' @seealso \code{makeConditionalMatrices} and \code{fitExceedancesVines}.
+#' @examples fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
+fitExceedancesSingleVine <- function(data_matrix, save=F, sparse=F){
+  num_cores <- parallel::detectCores()
+  if(sparse){
+    result <- rvinecopulib::vinecop( # TODO warning include vinecop
+      data = data_matrix,
+      family_set = c("gumbel", "indep", "clayton"),  psi0 = 0.95,
+      selcrit = "mbicv", trunc_lvl = Inf, tree_crit = "tau", threshold = 0,
+      par_method = "mle", cores = num_cores-1)
+  }else{
+    result <- VineCopula::RVineStructureSelect( # TODO warning include vinecop
+      data = data_matrix, familyset = c(0, 3, 4), type = 0,
+      selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
+      trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
+      se = FALSE, rotations = TRUE, method = "mle", cores = num_cores-1)
+  }
+  
+  return(result)
+}
 
 
 
