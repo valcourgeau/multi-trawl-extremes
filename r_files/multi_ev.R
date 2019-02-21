@@ -229,35 +229,50 @@ computePZero <- function(params){
   return(1-(1+params[,4]/params[,2])^{-abs(params[,1])})
 }
 
-#' Constructs a collecttion of matrices with the primary set of keys being the
-#' horizons and the second one being the column indices. Those matrices are the
-#' data conditional on extreme value in the respectivel column.
+#'Constructs a collecttion of matrices with the primary set of keys being the
+#'horizons and the second one being the column indices. Those matrices are the
+#'data conditional on extreme value in the respectivel column.
 #'
-#' @param data clean dataset.
-#' @param p.zeroes threshold in probability to be considered an extreme (ex:
-#'   0.95).
-#' @param horizons (integer) sequence of selected extreme horizons.
-#' @param clusters_size Extremes cluster size for each marginal.
-#' @param save Logical (flag, default to FALSE). Whether we save the conditonal
-#'   matrices.
-#' @param n_samples Number of rows selected to create the matrices (from 1 to
-#'   \code{n_samples}).
-#' @param name Filename if the collection of matrices is saved. Default is NA
-#'   (creates a timestamp on filename).
-#' @param optim Logical (flag, default to TRUE). Whether to perform univ model
-#'   optimisation fit on top of MLEs.
-#' @return Double-leveled list with horizons as first set of keys and columns
-#'   indices as second set of keys. E.g. \code{result[[2]][[4]]} would pick the
-#'   second horizon on the 4th variable.
-makeConditionalMatrices <- function(data, p.zeroes,
-                                    horizons, clusters_size, n_samples = length(data[,1]), 
+#'@param data clean dataset.
+#'@param p.zeroes threshold in probability to be considered an extreme (ex:
+#'  0.95).
+#'@param conditional_on name or index of variable to condition the extremes on.
+#'  Default if \code{NA} and in this case, it creates the full collection of
+#'  matrices.
+#'@param horizons (integer) sequence of selected extreme horizons.
+#'@param clusters_size Extremes cluster size for each marginal.
+#'@param save Logical (flag, default to FALSE). Whether we save the conditonal
+#'  matrices.
+#'@param n_samples Number of rows selected to create the matrices (from 1 to
+#'  \code{n_samples}).
+#'@param name Filename if the collection of matrices is saved. Default is NA
+#'  (creates a timestamp on filename).
+#'@param optim Logical (flag, default to TRUE). Whether to perform univ model
+#'  optimisation fit on top of MLEs.
+#'@return Double-leveled list with horizons as first set of keys and columns
+#'  indices as second set of keys. E.g. \code{result[[2]][[4]]} would pick the
+#'  second horizon on the 4th variable.
+makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
+                                    horizons, clusters_size, 
+                                    n_samples = length(data[,1]), 
                                     save=F, name=NA, optim=T){
+  n_vars <- length(data[1,])
   # adapt the size of p.zeroes to the number of cols
   if(length(p.zeroes) == 1){
-    p.zeroes <- rep(p.zeroes, length(data[1,]))
+    p.zeroes <- rep(p.zeroes, n_vars)
   }
   
-  #p.zeroes <- computePZero(params)
+  if(length(conditional_on) == 1 & is.na(conditional_on)){
+    conditional_on <- 1:n_vars
+  }else{
+    if(any(!(conditional_on %>% is.integer))){
+      stop('conditional_on should be a list of column indices to select from.')
+    }
+    if(any(conditional_on < 1) | any(conditional_on > n_vars)){
+      stop('conditional_on should be a list of index between 1 and the number of variables in data.')
+    }
+  }
+
   thres <- getThresholds(data = data, p.exceed = p.zeroes)
   print("thres")
   print(thres)
@@ -275,7 +290,7 @@ makeConditionalMatrices <- function(data, p.zeroes,
   exceedeances_cdf_ecdf <- as.matrix(exceedeances_cdf_ecdf)
   
   
-  for(i in 1:length(exceedeances[1,])){
+  for(i in 1:n_vars){
     # This creates ordered uniform samples in the same order 
     # as in data.
     exceedeances_cdf_ecdf[which(exceedeances[,i]==0), i] <- 
@@ -283,17 +298,16 @@ makeConditionalMatrices <- function(data, p.zeroes,
   }
 
   list_of_list_horizons <- list()
-  n_vars <- length(data[1,])
   for(h in horizons){
     list_of_matrices_conditional <- list()
     # creates a square matrix with all the vars in
     quantile.update.values <- matrix(0, 
-                                     nrow = length(exceedeances[1,]), 
-                                     ncol = length(exceedeances[1,]))
+                                     nrow = n_vars, 
+                                     ncol = n_vars)
     colnames(quantile.update.values) <- colnames(exceedeances)
     rownames(quantile.update.values) <- colnames(exceedeances)
     
-    for(i in 1:n_vars){
+    for(i in conditional_on){
       # creates a temporary matrix with cols equal to number of nvars + 1
       # and rows such that the i-th component is an extreme
       mat_temp <- matrix(0,
@@ -338,6 +352,7 @@ makeConditionalMatrices <- function(data, p.zeroes,
   return(list_of_list_horizons)
 }
 
+
 #' @param horizons (integer) sequence of selected extreme horizons.
 #' @param list_of_matrix Collection of conditional matrices (as created by
 #'   \code{makeConditionalMatrices}).
@@ -349,24 +364,35 @@ makeConditionalMatrices <- function(data, p.zeroes,
 #' @examples fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
 fitExceedancesVines <- function(horizons, list_of_matrix, save=F, sparse=F){
   #list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
-  paste("nvars?", length(list_of_matrix[[horizons[1]]]$unif.values[[1]][1,])) %>% print
+  cat("nvars?", length(list_of_matrix[[horizons[1]]]$unif.values[[1]][1,]))
   list_of_list_horizons <- list_of_matrix
   list_of_list_horizons_vines <- list()
   
-  n_vars <- length(list_of_list_horizons[[horizons[1]]]$unif.values[[1]][1,]) - 1 
-  col_names <- colnames(list_of_list_horizons[[horizons[1]]]$unif.values[[1]])
+  k <- 1
+  while(list_of_list_horizons[[horizons[1]]]$unif.values[[k]] %>% is.null){
+    k <- k + 1
+  }
   
+  n_vars <- length(list_of_list_horizons[[horizons[1]]]$unif.values[[k]][1,]) - 1 
+  col_names <- colnames(list_of_list_horizons[[horizons[1]]]$unif.values[[k]])
+ 
   for(h in horizons){
     list_of_vines_mat <- list()
     cat("Horizon: ", h, "\n")
-    for(i in 1:n_vars){
-      cat("--->", col_names[i], "\n")
-      time_proc <- proc.time()[3]
-      list_of_vines_mat[[i]] <- fitExceedancesSingleVine(data_matrix = 
-                                                           list_of_list_horizons[[h]]$unif.values[[i]],
-                                                         save = save, sparse = sparse)
-      cat("       |-----> done in", round((proc.time()[3] - time_proc), 2), "s. \n")
+    i <- 1
+    for(sub_matrix_list in list_of_matrix[[h]]$unif.values){
+      if(!is.null(sub_matrix_list)){
+          cat("---> fit for", col_names[i], "\n")
+          time_proc <- proc.time()[3]
+          list_of_vines_mat[[i]] <- fitExceedancesSingleVine(data_matrix = 
+                                                               sub_matrix_list,
+                                                             save = save, 
+                                                             sparse = sparse)
+          cat("       |-----> done in", round((proc.time()[3] - time_proc), 2), "s. \n")
+      }
+      i <- i + 1
     }
+    
     list_of_list_horizons_vines[[h]] <- list_of_vines_mat
   }
   
@@ -405,8 +431,6 @@ fitExceedancesSingleVine <- function(data_matrix, save=F, sparse=F){
   return(result)
 }
 
-
-
 #source("multi_ev.R")
 #'computeTRON allows to compute TRON probabilities very easily!
 #'@param data clean dataset
@@ -419,6 +443,9 @@ fitExceedancesSingleVine <- function(data_matrix, save=F, sparse=F){
 #'  autocorrelation sense. See \code{\link[ev.trawl]{GenerateParameters}}.
 #'@param n_samples Number of samples to compute the TRON probabilites via
 #'  Monte-Carlo.
+#'@param conditional_on name or index of variable to condition the extremes on.
+#'  Default if \code{NA} and in this case, it creates the full collection of
+#'  matrices and vines.
 #'@param name_matrices_file Default is NA. If NA, we use \code{makeFileName(NA,
 #'  "_matrix", ".RData")}, otherwise we use \code{name_matrices_file.RData}.
 #'@param name_vine_file Default is NA. If NA, we use \code{makeFileName(NA,
@@ -432,7 +459,7 @@ fitExceedancesSingleVine <- function(data_matrix, save=F, sparse=F){
 #'@return Returns a list of TRON probabilities with horizons as keys.
 #'@seealso \code{\link[ev.trawl]{GenerateParameters}} for \code{clusters} and 
 #'  paper sparse vine computation \link{https://arxiv.org/abs/1801.09739}.
-computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
+computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples, conditional_on=NA,
                         name_matrices_file=NA, name_vine_file=NA, 
                         name_tron_file=NA, save=TRUE, sparse=FALSE){
   name_matrices_file <- makeFileName(name_matrices_file, 
@@ -454,6 +481,7 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
   list_of_mat <- makeConditionalMatrices(data = data,
                                          p.zeroes = p.zeroes,
                                          horizons = horizons,
+                                         conditional_on = conditional_on,
                                          clusters_size = clusters,
                                          n_samples = n_samples,
                                          name = NA,
@@ -496,23 +524,23 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples,
 #'   sparse vine computation.
 #' @seealso \code{makeConditionalMatrices} and \code{fitExceedancesVines}.
 #' @examples TODO WARNING
-computeTRONwithListSingle <- function(vine, quantile_values, N){
+computeTRONwithListSingle <- function(vine, quantile_values, N, sparse){
   if(sparse){
-    te.st <- rvinecopulib::rvinecop(vine = vine, 
+    vine_sim <- rvinecopulib::rvinecop(vine = vine, 
                                     n = N,  
                                     cores = parallel::detectCores()-1)
   }else{
-    te.st <- VineCopula::RVineSim(RVM = list_vines[[h]][[i]], N = N)
+    vine_sim <- VineCopula::RVineSim(RVM = vine,
+                                     N = N)
   }
   
-  te.st <- te.st[,1:(length(te.st[1,])-1)]
-  qq.values <- quantile_values
-  te.st <- t(apply(te.st, MARGIN = 1, FUN = function(x){x>qq.values}))
+  vine_sim <- vine_sim[,1:(length(vine_sim[1,])-1)]
+  vine_sim <- t(apply(vine_sim, MARGIN = 1, FUN = function(x){x>quantile_values}))
   
   # exporting mean and sd
   results <- list()
-  results[["mean"]] <- t(apply(te.st, MARGIN = 2, mean))
-  results[["sd"]] <- t(apply(te.st, MARGIN = 2, sd))/sqrt(length(te.st[,1]))
+  results[["mean"]] <- t(apply(vine_sim, MARGIN = 2, mean))
+  results[["sd"]] <- t(apply(vine_sim, MARGIN = 2, sd))/sqrt(length(vine_sim[,1]))
   
   return(results)
 }
@@ -542,21 +570,26 @@ computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=1
     tron_proba_matrix_sd <- tron_proba_matrix
     cat(paste("Horizon", h, "\n"))
     for(i in 1:n_vars){
-      cat(paste("--> extreme in", colnames(tron_proba_matrix)[i]), "...")
-      
-      vine_sim_statistics <- 
-        computeTRONwithListSingle(
-                                vine = list_vines[[h]][[i]],
-                                quantile_values = list_of_matrix[[h]]$quantiles.values[i,],
-                                n_samples = N)
-      tron_proba_matrix[i,] <- vine_sim_statistics$mean
-      tron_proba_matrix_sd[i,] <- vine_sim_statistics$sd
-      cat("\t done\n")
+      current_vine <- list_vines[[h]][[i]]
+      current_quantiles <- list_of_matrix[[h]]$quantiles.values[i,]
+      if(!is.null(current_vine)){
+        cat(paste("--> extreme in", colnames(tron_proba_matrix)[i]), "...")
+        
+        vine_sim_statistics <- 
+          computeTRONwithListSingle(
+                                  vine = current_vine,
+                                  quantile_values = current_quantiles,
+                                  N = N,
+                                  sparse = sparse)
+        tron_proba_matrix[i,] <- vine_sim_statistics$mean
+        tron_proba_matrix_sd[i,] <- vine_sim_statistics$sd
+        cat("\t done\n")
+      }
     }
     tron_probabilities[[h]] <- list(mean=tron_proba_matrix, sd=tron_proba_matrix_sd)
   }
-  tron_probabilities[[1]]$mean
-  tron_probabilities[[1]]$sd
+  # tron_probabilities[[1]]$mean
+  # tron_probabilities[[1]]$sd
   if(save){
     list.save(tron_probabilities, file = "tron-cond-test.RData")
   }

@@ -56,7 +56,7 @@ tags_west_coast <- c(
   "Albuquerque"  ,"Denver"      , "Antonio")
 
 tags_west_coast_light <- c(
-  "Vancouver" ,   "Portland", "Seattle"   ,   "Angeles")
+  "Vancouver" ,   "Portland")
 
 tags_east_coast <- c( "Dallas" ,      "Houston"    ,  "City"      ,   "Minneapolis" , "Louis"    ,   
 "Chicago"  ,    "Nashville" ,   "Indianapolis", "Atlanta"  ,    "Detroit"    ,  "Jacksonville" ,"Charlotte"  ,  "Miami"   ,    
@@ -74,7 +74,7 @@ clean_west_light_data <- getCoreData(data = clean_energy_data,
 
 p.zeroes_guess <- 0.95
 clusters_guess <- ChoosingClusters(clean_west_light_data, p.zeroes_guess)
-horizons_guess <- c(1,2,3,4)
+horizons_guess <- c(1)
 
 
 tron_west <- computeTRON(data = clean_west_light_data,
