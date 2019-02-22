@@ -56,35 +56,36 @@ tags_west_coast <- c(
   "Albuquerque"  ,"Denver"      , "Antonio")
 
 tags_west_coast_light <- c(
-  "Vancouver" ,   "Portland")
+  "Vancouver" ,   "Portland", "PJMW", "PJME", "York")
 
 tags_east_coast <- c( "Dallas" ,      "Houston"    ,  "City"      ,   "Minneapolis" , "Louis"    ,   
 "Chicago"  ,    "Nashville" ,   "Indianapolis", "Atlanta"  ,    "Detroit"    ,  "Jacksonville" ,"Charlotte"  ,  "Miami"   ,    
-"Pittsburgh" ,  "Toronto"    ,  "Philadelphia" ,"York"       , "Montreal"   ,  "Boston" ) 
+"Pittsburgh" ,  "Toronto"    ,  "Philadelphia" ,"York"       , "Montreal"   ,  "Boston", "PJMW", "PJME") 
 
 clean_east_data <- getCoreData(data = clean_energy_data, 
                                get_tags = tags_east_coast)
-save(clean_east_data, file = "clean_east_data")
+save(clean_east_data, file = "clean_east_data.Rda")
 clean_west_data <- getCoreData(data = clean_energy_data, 
                                get_tags = tags_west_coast)
-save(clean_west_data, file="clean_west_data")
+save(clean_west_data, file="clean_west_data.Rda")
 clean_west_light_data <- getCoreData(data = clean_energy_data, 
                                      get_tags = tags_west_coast_light)
+clean_east_data <- rlist::list.load("clean_east_data.Rda")
 
 
 p.zeroes_guess <- 0.95
-clusters_guess <- ChoosingClusters(clean_west_light_data, p.zeroes_guess)
-horizons_guess <- c(1)
+clusters_guess <- ChoosingClusters(clean_east_data, p.zeroes_guess)
+horizons_guess <- c(1,2,3,4,5)
+colnames(clean_east_data)
 
-
-tron_west <- computeTRON(data = clean_west_light_data,
+tron_west <- computeTRON(data = clean_east_data,
                          p.zeroes = p.zeroes_guess,
                          horizons = horizons_guess,
                          clusters = clusters_guess,
-                         conditional_on = c(1,2,5),
+                         conditional_on = c(29:32, 58,59, 61:70),
                          n_samples = 40000,
                          save = T,
-                         sparse = F,
+                         sparse = T,
                          name_matrices_file = "matrix_west_light",
                          name_vine_file = "vine_west_light",
                          name_tron_file = "tron_west_light")
@@ -92,7 +93,13 @@ tron_west[[1]]$mean %>% (function(x){round(x,2)})
 tron_west[[2]]$mean %>% (function(x){round(x,2)})
 tron_west[[3]]$mean %>% (function(x){round(x,2)})
 
-rlist::list.load("2019-2-20-11-47-20_params.RData")
+
+
+
+
+
+
+rlist::list.load("2019-2-21-17-8-35_params.RData")
 
 vines_fitted <- rlist::list.load("vine_east_vines.RData")
 install.packages('ggraph')
@@ -122,15 +129,49 @@ paste("Where do the extreme in", colnames(clean_west_light_data)[10], "come from
 print(do.call(cbind, lapply(horizons_guess, function(h){tron_west[[h]]$mean[,10]})))
 
 
+cor_matrix <- matrix(0, nrow = 6, ncol = 6)
+cor_matrix[1,2] <- -0.33
+cor_matrix[1,3] <- -0.31
+cor_matrix[1,4] <- -0.27
+cor_matrix[1,5] <- -0.65
+cor_matrix[1,6] <- -0.59
 
 
+cor_matrix[2,3] <- 0.35
+cor_matrix[2,4] <- 0.28
+cor_matrix[2,5] <- 0.35
+cor_matrix[2,6] <- 0.33
 
 
+cor_matrix[3,4] <- 0.38
+cor_matrix[3,5] <- 0.49
+cor_matrix[3,6] <- 0.40
 
+cor_matrix[4,5] <- 0.43
+cor_matrix[4,6] <- 0.43
 
-
-
-
+cor_matrix[5,6] <- 0.76
+cor_matrix <- cor_matrix + t(cor_matrix)
+diag(cor_matrix) <- 1
+colnames(cor_matrix) <- c("O3",
+                          "CO",
+                          "SO2",
+                          "PM10",
+                          "NO",
+                          "NO2")
+rownames(cor_matrix) <- c("O3",
+                          "CO",
+                          "SO2",
+                          "PM10",
+                          "NO",
+                          "NO2")
+corrplot::corrplot(cor_matrix,
+                   tl.col = "black",
+                   method = "color",
+                   order = "hclust",
+                   number.cex = 1.7,
+                   addCoef.col = "white",
+                   addrect = 2)
 
 
 

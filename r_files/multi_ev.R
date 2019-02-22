@@ -366,7 +366,7 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
 #' @examples fitExceedancesVines(threshold_data[,100:102], list_of_list_horizons)
 fitExceedancesVines <- function(horizons, list_of_matrix, save=F, sparse=F){
   #list_of_list_horizons <- list.load(file = "conditional-mat-test.RData")
-  cat("nvars?", length(list_of_matrix[[horizons[1]]]$unif.values[[1]][1,]))
+  #cat("nvars?", length(list_of_matrix[[horizons[1]]]$unif.values[[1]][1,]))
   list_of_list_horizons <- list_of_matrix
   list_of_list_horizons_vines <- list()
   

@@ -224,7 +224,7 @@ datasetCleaning <- function(data, dates, sequential=T){
   
   
   #we apply linear modelling cleaning on all columns
-  result <- data(result, MARGIN = 2, 
+  result <- apply(data, MARGIN = 2, 
                   FUN = function(x){
                     if(sequential){
                       DeterministicCleaningSequential(data = x, dates = dates,
@@ -235,7 +235,8 @@ datasetCleaning <- function(data, dates, sequential=T){
                     }
                   }
   )
-  result <- as.data.frame(result)
+
+  result <- data.frame(result)
   colnames(result) <- colnames(data)
   return(result)
 }
