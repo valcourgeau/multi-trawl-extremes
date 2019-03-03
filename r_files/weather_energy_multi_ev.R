@@ -45,7 +45,9 @@ dim(core_energy_data)
 
 # dates is a vector of datetime
 # data is a vector of data 
-clean_energy_data <- datasetSTLCleaning(data = core_energy_data, 
+core_energy_data_std <- apply(core_energy_data, MARGIN = 2,
+                          FUN = function(x){(x-mean(x))/sd(x)})
+clean_energy_data <- datasetSTLCleaning(data = core_energy_data_std, 
                                         frequency = 24,
                                         trend_window = 24*365/4,
                                         season_window = 24)
@@ -58,9 +60,15 @@ tags_west_coast <- c(
 tags_west_coast_light <- c(
   "Vancouver" ,   "Portland", "PJMW", "PJME", "York")
 
-tags_east_coast <- c( "Dallas" ,      "Houston"    ,  "City"      ,   "Minneapolis" , "Louis"    ,   
-"Chicago"  ,    "Nashville" ,   "Indianapolis", "Atlanta"  ,    "Detroit"    ,  "Jacksonville" ,"Charlotte"  ,  "Miami"   ,    
-"Pittsburgh" ,  "Toronto"    ,  "Philadelphia" ,"York"       , "Montreal"   ,  "Boston", "PJMW", "PJME") 
+tags_east_coast <- c(   "Minneapolis" , "Louis", "Nashville" ,   "Indianapolis", "Atlanta"  ,    "Detroit",   
+"Pittsburgh" ,  "Toronto"    ,  "Philadelphia" ,"York"       ,  "Boston", "PJMW", "PJME", "Charlotte") 
+
+tags_east_coast_light <- c(  "Detroit",  "Philadelphia", "Pittsburgh", "Toronto",
+                      "York", "Vancouver"       ,  "Boston", "AEP", "DUQ") 
+
+
+
+
 
 clean_east_data <- getCoreData(data = clean_energy_data, 
                                get_tags = tags_east_coast)
@@ -68,27 +76,51 @@ save(clean_east_data, file = "clean_east_data.Rda")
 clean_west_data <- getCoreData(data = clean_energy_data, 
                                get_tags = tags_west_coast)
 save(clean_west_data, file="clean_west_data.Rda")
+
 clean_west_light_data <- getCoreData(data = clean_energy_data, 
                                      get_tags = tags_west_coast_light)
-clean_east_data <- rlist::list.load("clean_east_data.Rda")
+clean_east_light_data <- getCoreData(data = clean_energy_data, 
+                                     get_tags = tags_east_coast_light)
+save(clean_east_light_data, file="clean_east_light_data.Rda")
+
+exc_test <- makeExceedances(data = clean_east_light_data,
+                            thresholds = getThresholds(clean_east_light_data, 0.96))
+acf(exc_test[,10])
+
+p.zeroes_guess <- 0.96
+clusters_guess <- ChoosingClusters(clean_east_light_data, p.zeroes_guess)
+horizons_guess <- c(1,2,3,4,5,6)
+clusters_guess
+
+# par(mfrow=c(8,8))
+# for(i in 1:64){
+#   plot(clean_east_data[1:5000,i], 
+#        type='l',
+#        ylab=colnames(clean_east_data)[i])
+# }
+# plot(, type='l')
+
+# colnames(clean_east_data)
+
+# ChoosingThresholds(clean_east_data, 0.96)
+
+tron_east_light <- computeTRON(data = clean_east_light_data,
+                               p.zeroes = p.zeroes_guess,
+                               horizons = horizons_guess,
+                               clusters = clusters_guess,
+                               conditional_on = NA,
+                               n_samples = 40000,
+                               save = T,
+                               sparse = F,
+                               name_matrices_file = paste("matrix_east_light_cond"),
+                               name_vine_file = paste("vine_east_light_cond"),
+                               name_tron_file = paste("tron_east_light_cond"))
 
 
-p.zeroes_guess <- 0.95
-clusters_guess <- ChoosingClusters(clean_east_data, p.zeroes_guess)
-horizons_guess <- c(1,2,3,4,5)
-colnames(clean_east_data)
 
-tron_west <- computeTRON(data = clean_east_data,
-                         p.zeroes = p.zeroes_guess,
-                         horizons = horizons_guess,
-                         clusters = clusters_guess,
-                         conditional_on = c(29:32, 58,59, 61:70),
-                         n_samples = 40000,
-                         save = T,
-                         sparse = T,
-                         name_matrices_file = "matrix_west_light",
-                         name_vine_file = "vine_west_light",
-                         name_tron_file = "tron_west_light")
+
+
+
 tron_west[[1]]$mean %>% (function(x){round(x,2)})
 tron_west[[2]]$mean %>% (function(x){round(x,2)})
 tron_west[[3]]$mean %>% (function(x){round(x,2)})

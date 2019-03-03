@@ -37,6 +37,7 @@ threshold_test <- function(dat, p.zero){
   ## Need to give Northrop - Coleman ’s score test a set of thresholds
   proba <- seq(from=0.8, to=0.99, by=0.02)
   threshes <- quantile(dat, probs = proba)
+  
   ## Sometimes score test fails
   temp <- tryCatch(score.fitrange(dat , threshes)$e.p.values , error = function ( e) NA)
   result[["score"]] <- list(proba=proba[2:length(proba)], p.values=temp)

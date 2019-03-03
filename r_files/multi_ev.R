@@ -9,6 +9,7 @@ require(evir)
 source("prep_univariate_latent_trawl_fit.R")
 source("utils.R")
 source("infer_latent_value.R")
+source("auto_threshold_selection.R")
 
 
 
@@ -29,6 +30,8 @@ source("infer_latent_value.R")
 findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=NA, save=T){
   n_vars <- length(data[1,])
   n_rows <- length(data[,1])
+  
+  #return(vapply(rlist::list.load("2019-3-1-15-43-27_params.RData"), as.vector, c(1,1,1,1)) %>% t)
   
   if(any(clusters_size <= 0)){
     stop('clusters_size should have positive entries.')
@@ -51,7 +54,7 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=
       cat(" done.\n")
       if(optim){
         cat("|---> Preparing optimisation...")
-        marginal_values <- exc[1:2000,i_agent] # TODO 1000!
+        marginal_values <- exc[1:1000,i_agent] # TODO 1000!
         marginal_times <- (1:n_rows)/n_rows
         exp_params_names <- c("alpha", "beta", "rho", "kappa")
         fixed_params_names <- c("alpha")
@@ -68,11 +71,16 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=
                                    transformation = T))
         }
         lower <-c(1,
-                  0.01,
+                  0.001,
                   0.1)
-        upper <-c(100,
-                  2,
-                  100)
+        upper <-c(200,
+                  1.99,
+                  200)
+        # if(val_params[i_agent,1] < 0){
+        #   tmp_p <- lower[1]
+        #   lower[1] <- - upper[1]
+        #   upper[1] <- - tmp_p
+        # }
         
         initial_guess <- list()
         for(j in 1:length(val_params[1,])){
@@ -94,7 +102,9 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=
         res_concat <- rep(0, 4)
         res_concat[fixed_params_index] <- val_params[i_agent, fixed_params_index]
         res_concat[-fixed_params_index] <- res
+        cat("old", val_params[i_agent, ] %>% as.vector,"\n")
         val_params[i_agent, ] <- res_concat
+        cat("new",val_params[i_agent, ] %>% as.vector,"\n")
       }
       
   }
@@ -281,6 +291,7 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
   
   params <- findUnivariateParams(data = data, clusters_size = clusters_size, 
                                  thresholds = thres, name = name, save = T, optim = optim) # TODO WARNING save?!
+  print(params)
   exceedeances <- makeExceedances(data = data, thresholds = thres, normalize = T)
 
   # TODO refactor
@@ -300,6 +311,7 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
   }
 
   list_of_list_horizons <- list()
+  cat("horizons", horizons, "\n")
   for(h in horizons){
     list_of_matrices_conditional <- list()
     # creates a square matrix with all the vars in
@@ -312,6 +324,7 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
     for(i in conditional_on){
       # creates a temporary matrix with cols equal to number of nvars + 1
       # and rows such that the i-th component is an extreme
+      cat("n_samples", n_samples, " h ", h, "\n")
       mat_temp <- matrix(0,
                          nrow = length(which(exceedeances[1:(n_samples-h), i] > 0)),
                          ncol = n_vars+1)
@@ -336,6 +349,9 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
       
       colnames(mat_temp) <- c(colnames(exceedeances), colnames(exceedeances)[i])
       list_of_matrices_conditional[[i]] <- mat_temp
+      if(sum(is.na(mat_temp))>0){
+        print('NA in conditional matrices')
+      }
     }
     
     list_of_list_horizons[[h]] <- list(
@@ -480,6 +496,7 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples, condition
                                   normalize = TRUE)
   
   # fit univ models + compute the matrices
+  #print(horizons)
   list_of_mat <- makeConditionalMatrices(data = data,
                                          p.zeroes = p.zeroes,
                                          horizons = horizons,
@@ -488,7 +505,7 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples, condition
                                          n_samples = n_samples,
                                          name = NA,
                                          save = F,
-                                         optim = F)
+                                         optim = T)
   if(save){
     rlist::list.save(list_of_mat, name_matrices_file) # save
   }
