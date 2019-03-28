@@ -31,8 +31,10 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=
   n_vars <- length(data[1,])
   n_rows <- length(data[,1])
   
-  #return(vapply(rlist::list.load("2019-3-1-15-43-27_params.RData"), as.vector, c(1,1,1,1)) %>% t)
-  
+  # temp_params <-vapply(rlist::list.load("2019-3-1-15-43-27_params.RData"), as.vector, c(1,1,1,1)) %>% t
+  # print(dim(temp_params))
+  # return(vapply(rlist::list.load("2019-3-1-15-43-27_params.RData"), as.vector, c(1,1,1,1)) %>% t)
+  # 
   if(any(clusters_size <= 0)){
     stop('clusters_size should have positive entries.')
   }
@@ -71,11 +73,11 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=
                                    transformation = T))
         }
         lower <-c(1,
-                  0.001,
+                  0.01,
                   0.1)
-        upper <-c(200,
-                  1.99,
-                  200)
+        upper <-c(80,
+                  4,
+                  80)
         # if(val_params[i_agent,1] < 0){
         #   tmp_p <- lower[1]
         #   lower[1] <- - upper[1]
@@ -200,6 +202,7 @@ makeExceedances <- function(data, thresholds, normalize=TRUE){
     epd <- (data - thresholds) * (data > thresholds)
     
   }
+  
   if(normalize){
     epd <- apply(X = as.matrix(epd), MARGIN = 2, 
                  FUN = function(x){return(x/sd(x))})
@@ -349,6 +352,9 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
       
       colnames(mat_temp) <- c(colnames(exceedeances), colnames(exceedeances)[i])
       list_of_matrices_conditional[[i]] <- mat_temp
+      
+      print(colSums(is.na(mat_temp)))
+      
       if(sum(is.na(mat_temp))>0){
         print('NA in conditional matrices')
       }
@@ -441,7 +447,7 @@ fitExceedancesSingleVine <- function(data_matrix, save=F, sparse=F){
   }else{
     result <- VineCopula::RVineStructureSelect( # TODO warning include vinecop
       data = data_matrix, familyset = c(0, 3, 4), type = 0,
-      selectioncrit = "AIC", indeptest = TRUE, level = 0.05,
+      selectioncrit = "BIC", indeptest = TRUE, level = 0.05,
       trunclevel = NA, progress = FALSE, weights = NA, treecrit = "tau",
       se = FALSE, rotations = TRUE, method = "mle", cores = num_cores-1)
   }
@@ -504,24 +510,29 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples, condition
                                          clusters_size = clusters,
                                          n_samples = n_samples,
                                          name = NA,
-                                         save = F,
+                                         save = T,
                                          optim = T)
   if(save){
     rlist::list.save(list_of_mat, name_matrices_file) # save
   }
-  
-  # compute the vines
+  #
+  # # # compute the vines
   print("Fitting vines:")
-  list_vines <- fitExceedancesVines(horizons = horizons, 
+  list_vines <- fitExceedancesVines(horizons = horizons,
                                     list_of_matrix = list_of_mat,
                                     save = F,
                                     sparse = sparse)
   if(save){
     rlist::list.save(list_vines, name_vine_file) #save
   }
-  
-  # compute TRON
+
+
+  # list_of_mat <- rlist::list.load("matrix_east_light_1_to_72_matrix.RData")
+  # list_vines <- rlist::list.load("vine_east_light_1_to_72_vines.RData")
+  # # compute TRON
   print("Computing TRONs:")
+  #list_of_mat <- rlist::list.load("matrix_east_light_1_to_72_2nd_matrix.RData")
+  #list_vines <- rlist::list.load("vine_east_light_1_to_72_2nd_vines.RData")
   tron <- computeTRONwithLists(data = data,
                                horizons = horizons,
                                list_vines = list_vines,
@@ -558,8 +569,8 @@ computeTRONwithListSingle <- function(vine, quantile_values, N, sparse){
   
   # exporting mean and sd
   results <- list()
-  results[["mean"]] <- t(apply(vine_sim, MARGIN = 2, mean))
-  results[["sd"]] <- t(apply(vine_sim, MARGIN = 2, sd))/sqrt(length(vine_sim[,1]))
+  results[["mean"]] <- t(apply(vine_sim, MARGIN = 2, FUN = mean, na.rm=TRUE))
+  results[["sd"]] <- t(apply(vine_sim, MARGIN = 2, FUN = sd, na.rm=TRUE))/sqrt(length(which(!is.na(vine_sim[,1]))) - 1)
   
   return(results)
 }
@@ -606,6 +617,8 @@ computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=1
                                   sparse = sparse)
         tron_proba_matrix[i,] <- vine_sim_statistics$mean
         tron_proba_matrix_sd[i,] <- vine_sim_statistics$sd
+        # print(tron_proba_matrix[i,])
+        # print(tron_proba_matrix_sd[i,])
         cat("\t done\n")
       }
       i <- i + 1

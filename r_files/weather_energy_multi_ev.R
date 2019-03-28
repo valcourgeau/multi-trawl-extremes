@@ -46,10 +46,14 @@ dim(core_energy_data)
 # dates is a vector of datetime
 # data is a vector of data 
 core_energy_data_std <- apply(core_energy_data, MARGIN = 2,
-                          FUN = function(x){(x-mean(x))/sd(x)})
+                          FUN = function(x){(x)/sd(x)})
+
+stl_clean_aep <- stl(core_energy_data_std[,91] %>% (function(x){ts(x, frequency = 24)}), s.window = 24, t.window = 24*365/4)
+plot(stl_clean_aep)
+
 clean_energy_data <- datasetSTLCleaning(data = core_energy_data_std, 
                                         frequency = 24,
-                                        trend_window = 24*365/4,
+                                        trend_window = round(24*365/4),
                                         season_window = 24)
 clean_energy_data <- datasetCleaning(data = clean_energy_data, dates = dates)
 
@@ -63,12 +67,8 @@ tags_west_coast_light <- c(
 tags_east_coast <- c(   "Minneapolis" , "Louis", "Nashville" ,   "Indianapolis", "Atlanta"  ,    "Detroit",   
 "Pittsburgh" ,  "Toronto"    ,  "Philadelphia" ,"York"       ,  "Boston", "PJMW", "PJME", "Charlotte") 
 
-tags_east_coast_light <- c(  "Detroit",  "Philadelphia", "Pittsburgh", "Toronto",
+tags_east_coast_light <- c(  "Detroit",  "Charlotte", "Toronto",
                       "York", "Vancouver"       ,  "Boston", "AEP", "DUQ") 
-
-
-
-
 
 clean_east_data <- getCoreData(data = clean_energy_data, 
                                get_tags = tags_east_coast)
@@ -82,14 +82,14 @@ clean_west_light_data <- getCoreData(data = clean_energy_data,
 clean_east_light_data <- getCoreData(data = clean_energy_data, 
                                      get_tags = tags_east_coast_light)
 save(clean_east_light_data, file="clean_east_light_data.Rda")
-
+load("clean_east_light_data.Rda")
 exc_test <- makeExceedances(data = clean_east_light_data,
                             thresholds = getThresholds(clean_east_light_data, 0.96))
 acf(exc_test[,10])
 
 p.zeroes_guess <- 0.96
 clusters_guess <- ChoosingClusters(clean_east_light_data, p.zeroes_guess)
-horizons_guess <- c(1,2,3,4,5,6)
+horizons_guess <- c(1:6,12,24,48,72)
 clusters_guess
 
 # par(mfrow=c(8,8))
@@ -112,22 +112,71 @@ tron_east_light <- computeTRON(data = clean_east_light_data,
                                n_samples = 40000,
                                save = T,
                                sparse = F,
-                               name_matrices_file = paste("matrix_east_light_cond"),
-                               name_vine_file = paste("vine_east_light_cond"),
-                               name_tron_file = paste("tron_east_light_cond"))
+                               name_matrices_file = paste("matrix_east_light_1_to_72_2nd"),
+                               name_vine_file = paste("vine_east_light_1_to_72_2nd"),
+                               name_tron_file = paste("tron_east_ligh_1_to_72_2nd"))
+
+for(h in horizons_guess){
+  print(t(tron_east_light[[h]]$mean[1:5,19]) %>% (function(x){round(x,2)}))
+}
 
 
+indices_show <- c(19, 20, 1:18, 21:32)
+mat <- matrix(0, ncol=length(indices_show), nrow=length(horizons_guess))
+i <- 1
+for(h in horizons_guess){
+  mat[i,] <- (t(tron_east_light[[h]]$mean[indices_show, 19]) %>% (function(x){round(x,2)}))
+  i <- i + 1
+}
+
+rownames(mat) <- horizons_guess
+
+mat
+colnames(mat) <- (rownames(tron_east_light[[h]]$mean)[indices_show])
+
+colnames(mat) <- c("AEP", "DUQ", 
+                   "Humidity VC", "Humidity DT", "Humidity CH", "Humidity TO", "Humidity NY", "Humidity BO", 
+                   "Pressure CV", "Pressure DT", "Pressure CH", "Pressure TO", "Pressure NY", "Pressure BO",
+                   "Temperature VC"," Temperature DT"," Temperature CH", "Temperature TO", "Temperature NY", "Temperature BO",
+                   "Wind Speed VC cos"," Wind Speed VC sin", "Wind Speed DT cos"," Wind Speed DT sin", "Wind Speed CH cos", "Wind Speed CH sin",
+                   "Wind Speed TO cos", "Wind Speed TO sin", "Wind Speed NY cos", "Wind Speed NY sin", "Wind Speed BO cos", "Wind Speed BO sin")
+
+write.csv(t(mat), "prob_1_to_72_2nd.csv")
+t(mat)[21:32,]
+read.csv("prob_1_to_72_t.csv")[21:32,]
+read.csv("prob_1_to_72_t.csv")[21:32,-1] - t(mat)[21:32,]
 
 
+df_mat <- data.frame(mat)
+colnames(df_mat) <- rownames(tron_east_light[[h]]$mean)[indices_show]
+
+getPalette <- colorRampPalette(brewer.pal(9, "Set1"))
+color_to_use <- getPalette(length(indices_show))
+plot(horizons_guess[1:6], df_mat[1:6,2], type = 'o', ylim = c(0,0.35), col=color_to_use[2], lwd=2, xaxt="n", yaxt="n")
+for(i in 3:32){
+  lines(horizons_guess[1:6], df_mat[1:6,i], col = color_to_use[i], lwd = 2, type='o')
+}
+axis(side=1,at=horizons_guess,tcl=0.4,lwd.ticks=3,mgp=c(0,0.5,0))
+axis(side=2,at=seq(0,0.3,by=0.05),tcl=0.4,lwd.ticks=3,mgp=c(0,0.5,0))
+
+tron_east_light[[1]]$mean %>% (function(x){round(x,2)})
+tron_east_light[[2]]$mean %>% (function(x){round(x,2)})
+tron_east_light[[3]]$mean %>% (function(x){round(x,2)})
+
+tron_east_light[[1]]$mean[19:20,] %>% (function(x){round(x,2)})
 
 
 tron_west[[1]]$mean %>% (function(x){round(x,2)})
 tron_west[[2]]$mean %>% (function(x){round(x,2)})
 tron_west[[3]]$mean %>% (function(x){round(x,2)})
 
-
-
-
+east_v <- rlist::list.load("vine_east_light_1_to_72_vines.RData")
+east_m <- rlist::list.load("matrix_east_light_1_to_72_matrix.RData")
+for(h in horizons_guess){
+  print(VineCopula::RVineGofTest(data = east_m[[h]]$unif.values[[19]],
+                                 RVM = east_v[[h]][[19]],
+                                 method = "White"))
+}
 
 
 

@@ -310,7 +310,7 @@ ProcessWindProjections <- function(data, tags){
 #' @examples
 #' ConcatAndReplaceWind(energy_weather_merged, c("New.York", "Houston")) %>% colnames
 ConcatAndReplaceWind <- function(data, tags){
-  concat_vals <- ProcessWindProjections(data = data, tags = tags)
+  concat_vals <- ProcessWindProjections(data = data, tags = tags) %>% abs
   removing_tags_index <- ignoreColStartingWith(data, c("wind_direction", "wind_speed"), return.filters = T)
   #print(removing_tags_index)
   concat_vals <- cbind(data[,removing_tags_index], concat_vals)
