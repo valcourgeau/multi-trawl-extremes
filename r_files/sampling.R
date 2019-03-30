@@ -353,7 +353,7 @@ GetPredictionResults(simulations = ssmple,
                      extreme_quantiles = q_extremes,
                      conditional_extreme_quantiles = q_extremes_cond)
 
-GetMCPredictions <- function(data_train, data_test, marginal, p.zero, h, conditional_on, bootstrap, n_extreme=NA){
+GetMCPredictions <- function(data_train, data_test, marginal, p.zero, h, conditional_on, bootstrap, vine, n_extreme=NA){
   alpha <- marginal$alpha
   beta <- marginal$beta
   kappa <- marginal$alpha
@@ -364,9 +364,11 @@ GetMCPredictions <- function(data_train, data_test, marginal, p.zero, h, conditi
   cond_data <- GetConditionalMatrix(data_train, h=h_selected, conditional_on = conditional_on)
   cond_data_test <- GetConditionalMatrix(data_test, h=h_selected, conditional_on = conditional_on)
   
-  
   extreme_index <- which(cond_data[,ncol(cond_data)] > q_extremes[conditional_on]) # finds rows on which last col is extreme
   extreme_index_test <- which(cond_data_test[,ncol(cond_data_test)] > q_extremes[conditional_on]) # finds rows on which last col is extreme
+  
+  assertthat::assert_that(is.na(n_extreme) | n_extreme < length(extreme_index_test))
+  
   ecdf_without <- apply(data_train, FUN = ecdf, MARGIN = 2)
   ecdf_extreme <- apply(cond_data[extreme_index,], FUN = ecdf, MARGIN = 2)
   
@@ -375,7 +377,6 @@ GetMCPredictions <- function(data_train, data_test, marginal, p.zero, h, conditi
                  (x - q_extremes) * (x > q_extremes)
                }, MARGIN = 1)
   epd <- t(epd)
-  dim(epd)
   sd_epd <- apply(epd, sd, MARGIN = 2)
   epd <- apply(X = epd, MARGIN = 2, FUN = function(x){return(x/sd(x))})
   
@@ -383,33 +384,61 @@ GetMCPredictions <- function(data_train, data_test, marginal, p.zero, h, conditi
                     function(x){
                       if(x <= q_extremes[conditional_on]){ecdf_without[[conditional_on]](x)}
                       else{
-                        min(0.9999,ecdf_without[[conditional_on]](q_extremes[conditional_on]) + (1-q_extremes[conditional_on])*(1-(1+sign(alpha)*(x-q_extremes[conditional_on])/sd_epd[conditional_on]/(beta+kappa))^{-alpha}))
+                        min(0.9999,ecdf_without[[conditional_on]](q_extremes[conditional_on]) + 
+                              (1-q_extremes[conditional_on])*(1-(1+sign(alpha)*(x-q_extremes[conditional_on])/sd_epd[conditional_on]/(beta+kappa))^{-alpha}))
                       }}, FUN.VALUE = 1)
   q_extremes_cond <- vapply(1:ncol(data_train), function(x){mean(cond_data[,x] <= q_extremes[x])}, FUN.VALUE = 1)
   
+  cat('Bootstrap:\n')
   if(is.na(n_extreme)){
-    ssmple <- RVineCondSim(target = conditional_on, samples = db_unif[extreme_index_test], RVM = v_temp, nsub=boostrap)
+    ssmple <- RVineCondSim(target = conditional_on, samples = db_unif[extreme_index_test], RVM = vine, nsub=bootstrap)
   }else{
-    ssmple <- RVineCondSim(target = conditional_on, samples = db_unif[extreme_index_test[1:n_extreme]], RVM = v_temp, nsub=100)
+    ssmple <- RVineCondSim(target = conditional_on, samples = db_unif[extreme_index_test[1:n_extreme]], RVM = vine, nsub=bootstrap)
   }
   
-  res <- GetPredictionResults(simulations = ssmple,
+  res_test <- GetPredictionResults(simulations = ssmple,
                          conditional_data = cond_data,
                          conditional_data_pred = cond_data_test,
                          extreme_index_pred = extreme_index_test,
                          extreme_quantiles = q_extremes,
                          conditional_extreme_quantiles = q_extremes_cond)
-  return(list(results=res, bootstrap=ssmaple)) 
+  
+  db_unif <- vapply(data_for_fitting[,conditional_on], 
+                    function(x){
+                      if(x <= q_extremes[conditional_on]){ecdf_without[[conditional_on]](x)}
+                      else{
+                        min(0.9999,ecdf_without[[conditional_on]](q_extremes[conditional_on]) + 
+                              (1-q_extremes[conditional_on])*(1-(1+sign(alpha)*(x-q_extremes[conditional_on])/sd_epd[conditional_on]/(beta+kappa))^{-alpha}))
+                      }}, FUN.VALUE = 1)
+  q_extremes_cond <- vapply(1:ncol(data_train), function(x){mean(cond_data[,x] <= q_extremes[x])}, FUN.VALUE = 1)
+  
+  cat('Bootstrap:\n')
+  if(is.na(n_extreme)){
+    ssmple_train <- RVineCondSim(target = conditional_on, samples = db_unif[extreme_index], RVM = vine, nsub=bootstrap)
+  }else{
+    ssmple_train <- RVineCondSim(target = conditional_on, samples = db_unif[extreme_index[1:n_extreme]], RVM = vine, nsub=bootstrap)
+  }
+  
+  res_train <- GetPredictionResults(simulations = ssmple_train,
+                              conditional_data = cond_data,
+                              conditional_data_pred = cond_data,
+                              extreme_index_pred = extreme_index,
+                              extreme_quantiles = q_extremes,
+                              conditional_extreme_quantiles = q_extremes_cond)
+  
+  return(list(results_train=res_train, results_test=res_test, bootstrap_test=ssmple, bootstrap_train=ssmple_train)) 
 }
 
 set.seed(42)
-GetMCPredictions(data_train = data_for_fitting, data_test = data_for_pred,
-                 marginal = list(alpha=alpha, beta=beta, kappa=kappa),
-                 p.zero = 0.95,
-                 h = 12,
-                 conditional_on = 2,
-                 bootstrap = 50,
-                 n_extreme = 50)
+testing_predictions <- GetMCPredictions(data_train = data_for_fitting, 
+                                         data_test = data_for_pred,
+                                         marginal = list(alpha=alpha, beta=beta, kappa=kappa),
+                                         p.zero = 0.95,
+                                         h = h_selected,
+                                         conditional_on = 2,
+                                         vine=v_temp,
+                                         bootstrap = 50,
+                                         n_extreme = 500)
 
 
 
