@@ -7,6 +7,8 @@ pdbl <- pdbl
 library(evir)
 library(forecast)
 library(lubridate)
+set.seed(42)
+
 stlpd <- pdbl
 n_vars <- length(pdbl[1,]) - 3
 for(i_agent in 4:(n_vars+3)){
@@ -31,16 +33,15 @@ for(i_agent in 4:(n_vars+3)){
   stlpd[,i_agent] <- lm(stlpd[,i_agent] ~ fitting_matrix)$residuals
 }
 
-par(mfrow=c(n_vars,3))
-for(i_agent in 4:(n_vars+3)){
-  Acf(stlpd[,i_agent], lag.max = 20)
-  plot(stlpd[,i_agent], type = "l")
-  (Pacf(stlpd[,i_agent]))
-}
-par(mfrow=c(1,1))
-
 q.s <- rep(0.95, n_vars) #95% everywhere
 thr_stl <- rep(0, n_vars)
+
+
+# WARNING
+# Jittering with normals
+stlpd[,-c(1:3)] <- apply(stlpd[,-c(1:3)], function(x){
+  return(x + rnorm(n = length(x), mean = 0, sd = 0.1 * sd(x)))
+}, MARGIN = 2)
 
 par(mfrow=c(3,2))
 for(i_agent in 4:(n_vars+3)){
@@ -58,30 +59,133 @@ epd <- t(epd)
 epd <- apply(X = epd, MARGIN = 2, FUN = function(x){return(x/sd(x))})
 
 library(forecast)
-par(mfrow=c(6,2), mar=c(5.1,4.1,0.5,1.1))
-for(i_agent in 3:(n_vars+2)){
-  Acf(epd[,i_agent-2], lag.max = 40,
-      ylab=paste("ACF", colnames(epd)[i_agent-2]),
-      main="")
-  plot(epd[,i_agent-2], type="l", ylab=paste("Exceed", colnames(epd)[i_agent-2]),
-       xlab="Time")
-  #(Pacf(epd[,i_agent-2]))
-}
-par(mfrow=c(1,1))
+# par(mfrow=c(6,2), mar=c(5.1,4.1,0.5,1.1))
+# for(i_agent in 3:(n_vars+2)){
+#   Acf(epd[,i_agent-2], lag.max = 40,
+#       ylab=paste("ACF", colnames(epd)[i_agent-2]),
+#       main="")
+#   plot(epd[,i_agent-2], type="l", ylab=paste("Exceed", colnames(epd)[i_agent-2]),
+#        xlab="Time")
+#   #(Pacf(epd[,i_agent-2]))
+# }
+# par(mfrow=c(1,1))
 
 setwd("C:/Users/Valentin/Documents/GitHub/multi-trawl-extremes/r_files/")
-source("prep_univariate_latent_trawl_fit.R")
+#source("prep_univariate_latent_trawl_fit.R")
 library("evir")
-s.clusters <- c(10, 15, 11, 11, 13, 13)
-val_params <- matrix(0, nrow = length(epd[1,]), ncol = 4)
-par(mfrow=c(3,2), mar=c(5.1,4.1,2.1,2.1))
-for(i_agent in 1:n_vars){
-  val_params[i_agent,] <- generate_parameters(epd[,i_agent], cluster.size = s.clusters[i_agent])
-  evir::qplot(epd[,i_agent][epd[,i_agent] > 0], xi = round(1/val_params[i_agent,1],3), labels = T, main=(colnames(epd)[i_agent]))
-  print((1+val_params[i_agent,4]/val_params[i_agent,2])^{-val_params[i_agent,1]})
+s.clusters <- c(5, 5, 4, 4, 4, 4)
+# val_params <- matrix(0, nrow = length(epd[1,]), ncol = 4)
+# par(mfrow=c(3,2), mar=c(5.1,4.1,2.1,2.1))
+# for(i_agent in 1:n_vars){
+#   val_params[i_agent,] <- ev.trawl::GenerateParameters(epd[,i_agent], cluster.size = s.clusters[i_agent])
+#   evir::qplot(epd[,i_agent][epd[,i_agent] > 0], xi = round(1/val_params[i_agent,1],3), labels = T, main=(colnames(epd)[i_agent]))
+#   print((1+val_params[i_agent,4]/val_params[i_agent,2])^{-val_params[i_agent,1]})
+# }
+# par(mfrow=c(1,1))
+# val_params
+
+
+computeTRON(data = stlpd[,-c(1:3)], rep(0.95,6), horizons = 1, 
+            clusters = s.clusters, n_samples = 1, conditional_on = 3, save = F)
+
+val_p3 <- findUnivariateParams(data = epd, 
+                     clusters_size = s.clusters, 
+                     thresholds= rep(0, 6), 
+                     optim=T, 
+                     name=NA, 
+                     save=T)
+
+N <- 5
+sim_results <- array(0, c(n_vars,N,4))
+for(i in 1:6){
+  alpha <- 1/val_p3[i,1]
+  beta <- val_p3[i,2]/val_p3[i,1]  - val_p3[i,4]
+  kappa <- val_p3[i,4]
+  rho <- val_p3[i,3]
+  n.timestamps <- 5000
+  times <- 1:n.timestamps
+  
+  marg.dist <- "gamma"
+  n <- 1
+  transformation <- FALSE
+  trawl.function <- "exp"
+  for(k in 1:N){
+    sim_data <- rlexceed(alpha = alpha, beta = beta, kappa = kappa, rho = rho, times = times,
+                   marg.dist = marg.dist, n = n, transformation = transformation,
+                   trawl.function= trawl.function)
+    sim_results[i,k,] <- findUnivariateParams(data = as.matrix(sim_data),
+                           clusters_size = s.clusters[i],
+                           thresholds= 0,
+                           optim=T,
+                           name=NA,
+                           save=T)
+  }
 }
-par(mfrow=c(1,1))
-val_params
+
+
+
+
+n.timestamps <- 200
+times <- 1:n.timestamps
+kappa <- 9.591304
+marg.dist <- "gamma"
+n <- 1
+transformation <- FALSE
+trawl.function <- "exp"
+
+trawl_sample <- ev.trawl::rtrawl(alpha = 1/0.3495718,
+                   beta = 3.358772 / 0.3495718 - 9.591304,
+                   #kappa = 9.591304,
+                   rho = 3.51,
+                   times = 1:1200/1200,
+                   marg.dist = marg.dist, n = 1, transformation = transformation,
+                   trawl.function= trawl.function)[1:1000]
+unif_sample <- runif(1:1000/1000)
+
+is_zero <- unif_sample < 1 - exp(-kappa * trawl_sample)
+tr_sample <- rep(0, length(is_zero))
+tr_sample[!is_zero] <- rexp(rate = trawl_sample, n=1)
+plot(tr_sample)
+
+# 0.8726082 1.106756 3.500629 1.272759 
+# 0.6286274 1.361573 0.07887054 2.165033 
+# 0.9284014 1.17611 0.09789664 1.274575 
+# 1.114835 2.224347 4 1.995394 
+# 0.8765932 0.9473717 0.2252814 1.083575 
+# 1.0909879 1.1744739 0.05629141 1.080561
+
+# lines 1 and 4
+# 0.6328275 0.922612 1.052502 1.478699
+# 0.8008777 1.370881 1.701520 1.711602
+
+val_p <- matrix(c(
+      0.3336088, 1.046199, 1.051463, 3.13539, 
+      0.6328275, 0.922612, 1.052502, 1.478699,
+      0.9284014, 1.17611, 0.09789664, 1.274575,
+      0.741663, 2.101144, 1.701722, 2.832777, 
+      0.8765932, 0.9473717, 0.2252814, 1.083575,
+      1.0909879, 1.1744739, 0.05629141, 1.080561
+), ncol = 6) %>% t
+
+val_p <- val_p2
+par(mfrow=c(3,2))
+for(i_agent in 1:n_vars){
+  # evir::qplot(epd[,i_agent][epd[,i_agent] > 0 ], xi = val_p[i_agent,1], labels = T,
+  #             main=(colnames(epd)[i_agent]), threshold = 0)
+  data_plot <- epd[,i_agent][epd[,i_agent] > 0]
+  ll <- gpdFit(data_plot, 0.0)$par.ests
+  fExtremes::qqparetoPlot(data_plot, xi = val_p2[i_agent, 1], threshold = 0.0)
+  #tea::qqgpd(data = data_plot, nextremes = length(data_plot), scale=0.23, shape = 2.19)
+  # print((1+val_params[i_agent,4]/val_params[i_agent,2])^{-val_params[i_agent,1]})
+  # print((1+ val_p[i_agent,1] * val_p[i_agent,4]/(val_p[i_agent,2] / abs(val_p[i_agent,1]) - val_p[i_agent,4]))^{-1/val_p[i_agent,1]})
+}
+
+par(mfrow=c(3,2))
+for(i_agent in 1:6){
+  plot(density(epd[,i_agent][epd[,i_agent] > 0 ]))
+  lines(0:15000/1000, dgpd(x = 0:15000/1000, shape = val_p[i_agent,1], scale = val_p[i_agent,2] ))
+}
+# TODO qqplot from 'tea' package, see docs
 
 source("infer_latent_value.R")
 epd.latent <- get.latent.values.mat(epd, val_params = val_params[,-3], randomise=F)

@@ -50,6 +50,7 @@ RVineCondSimSingle <- function(target, sample_target, RVM){
   d <- nrow(RVM$Matrix)
   sample_vine <- rep(NA, d)
   sample_vine[target] <- sample_target
+  
   for(tree in 1:d){
     for(cop_number in 1:(d-tree)){
       already_sampled <- which(!is.na(sample_vine)) # updating already_sampled
@@ -64,8 +65,8 @@ RVineCondSimSingle <- function(target, sample_target, RVM){
             assertthat::are_equal(length(to_sample), 1)
             assertthat::are_equal(length(already_left), 1)
             sample_vine[to_sample] <- VineCopula::BiCopCondSim(N = 1,
-                                                               cond.val = sample_vine[already_left],
-                                                               cond.var = 1,
+                                                               cond.val = sample_vine[vars_lhs_rhs$LHS[already_left]],
+                                                               cond.var = already_left,
                                                                obj = get_copula(cop_number, tree, RVM))
           }
         }
@@ -124,14 +125,18 @@ RVineCondSim <- function(target, samples, RVM, nsub=1){
 GetConditionalMatrix <- function(data, h, conditional_on){
   n <- nrow(data)
   col_names <- colnames(data)
-  data <- cbind(data[h:n,], data[1:(n-h+1),conditional_on])
+  data <- cbind(data[(h+1):n,], data[1:(n-h),conditional_on])
   colnames(data) <- c(col_names, paste(col_names[conditional_on], "_ex", sep = ""))
   return(data)
 }
 
+# make sure indices are used
+# see difference between extreme and non-extreme input
+# see if we need to resample extreme inputs as unif(0,1)
+# then, take 500 extreme inputs with 1000 nsub and sensi/speci 
 
 
-GetPredictionResults <- function(simulations, conditional_data, conditional_data_pred, extreme_index_pred, extreme_quantiles, conditional_extreme_quantiles){
+GetPredictionResults <- function(simulations, conditional_data, conditional_data_pred, extreme_index_pred, extreme_quantiles, conditional_extreme_quantiles, ci=1.96){
   prediction_results <- list()
   nvars <- ncol(conditional_data)-1
   var_names <- colnames(conditional_data)[1:nvars]
@@ -153,14 +158,38 @@ GetPredictionResults <- function(simulations, conditional_data, conditional_data
       mean_extreme_response <- mean(binary_response) # same as proportion_extreme
       sd_extreme_response <- sd(binary_response)
       
-      lower_bound <- mean_extreme_response - 1.96*sd_extreme_response/sqrt(nsub)
-      upper_bound <- mean_extreme_response + 1.96*sd_extreme_response/sqrt(nsub)
+      # mean_extreme_response <- mean(simulations[,var,k])
+      # sd_extreme_response <- sd(simulations[,var,k])
+      # 
+      lower_bound <- mean_extreme_response - ci*sd_extreme_response/sqrt(nsub)
+      upper_bound <- mean_extreme_response + ci*sd_extreme_response/sqrt(nsub)
       
+
       prediction <- lower_bound > 1-conditional_extreme_quantiles[var]
       pred_upper <- upper_bound < 1-conditional_extreme_quantiles[var]
+
+
       
-      actual <- conditional_data_pred[extreme_index[k], var] > extreme_quantiles[var]
+      # 
+      # prediction <- lower_bound > 0.5
+      # pred_upper <- upper_bound < 0.5
       
+      if(!prediction & !pred_upper){
+          prediction <- F
+      }else{
+        if(!prediction & pred_upper){
+          prediction <- F
+        }
+      }
+      actual <- conditional_data_pred[extreme_index_test[k], var] > extreme_quantiles[var] # extreme_index_test + WARNING to use the right indices
+      
+      # print(actual)
+      # cat(lower_bound, ' - ', upper_bound, '\n')
+      # print(1-conditional_extreme_quantiles[var])
+      # print(mean_extreme_response)
+      # print(lower_bound)
+      # print(upper_bound)
+
       if(actual){
         n_extreme <- n_extreme + 1
       }else{
@@ -178,18 +207,6 @@ GetPredictionResults <- function(simulations, conditional_data, conditional_data
           }
         }
         counter <- counter + 1
-      }else{
-        if(pred_upper == actual){
-          if(actual == F){
-            counter_f <- counter_f + 1
-          }
-          else{
-            if(actual == T){
-              counter_t <- counter_t + 1
-            }
-          }
-          counter <- counter + 1
-        }
       }
     }
     
@@ -257,21 +274,22 @@ train_index <- 1:as.integer(0.8*nrow(daily_bloom))
 daily_train <- daily_bloom[train_index,]
 daily_test <- daily_bloom[-train_index,]
 
-
+source('multi_ev.R')
 tron_air_pollution <- computeTRON(data = daily_train,
                           p.zeroes = rep(0.95, 6),
                           horizons = c(1,2,3,4,5,6,12,24),
                           clusters = c(10,15,11,11,13,13),
                           n_samples = 100000,
-                          name_matrices_file = "matrix_air_pollution_rerun",
-                          name_vine_file = "vines_air_pollution_rerun",
-                          name_tron_file = "tron_air_pollution_rerun",
+                          name_matrices_file = "matrix_air_pollution_rerun_2",
+                          name_vine_file = "vines_air_pollution_rerun_2",
+                          name_tron_file = "tron_air_pollution_rerun_2",
                           save = T,
                           sparse = F)
+list.load("vines_air_pollution_rerun_2_vines.RData")
 
+vines_air_pollution <- rlist::list.load("vines_air_pollution_rerun_2_vines.RData")
+tron_air_pollution <- rlist::list.load("tron_air_pollution_rerun_2_tron.RData")
 
-
-vines_air_pollution <- rlist::list.load("vines_air_pollution_rerun_vines.RData")
 
 horizons_vines <- c(1,2,3,4,5,6,12,24)
 
@@ -296,18 +314,27 @@ contour(vines_of_interest)
 
 vines_1_72 <- rlist::list.load("hourly-bloomsbury-vines-12361224-v2.RData")
 
-h_selected <- 12
 #v_temp <- vines_1_72[[h_selected]][[1]]
 
 #v_temp <- RVineMatrixNormalize(v_temp) # vars in order from d to 1
 v_temp # we condition on the first variable 
 
+
+
+# 2
 alpha <- 4.1
 beta <- 4.12
 kappa <- 4.5
 rho <- 0.04
 
+# 1
+alpha <- 8.07
+beta <- 14.7
+kappa <- 6.62
+rho <- 0.26
 
+
+h_selected <- 12
 conditional_on <- 2
 v_temp <- vines_air_pollution[[h_selected]][[conditional_on]]
 data_for_fitting <- daily_train
@@ -333,25 +360,71 @@ dim(epd)
 sd_epd <- apply(epd, sd, MARGIN = 2)
 epd <- apply(X = epd, MARGIN = 2, FUN = function(x){return(x/sd(x))})
 
-db_unif <- vapply(data_for_pred[,conditional_on], 
+db_unif <- vapply(cond_data[,ncol(cond_data)], 
                   function(x){
-                    if(x <= q_extremes[conditional_on]){ecdf_without[[conditional_on]](x)}
+                    q_proba <- ecdf_without[[conditional_on]](q_extremes[conditional_on])
+                    
+                    if(x <= q_extremes[conditional_on]){
+                      return(ecdf_without[[conditional_on]](x))
+                      }
                     else{
-                  min(0.9999,ecdf_without[[conditional_on]](q_extremes[conditional_on]) + (1-q_extremes[conditional_on])*(1-(1+sign(alpha)*(x-q_extremes[conditional_on])/sd_epd[conditional_on]/(beta+kappa))^{-alpha}))
+                    return(min(0.999,q_proba + (1-q_proba)*(1-(1+sign(alpha)*(x-q_extremes[conditional_on])/sd_epd[conditional_on]/(beta+kappa))^{-alpha})))
     }}, FUN.VALUE = 1)
-hist(db_unif, breaks = 50)
+
+db_unif_train <- vapply(cond_data_test[,ncol(cond_data)], 
+                  function(x){
+                    q_proba <- ecdf_without[[conditional_on]](q_extremes[conditional_on])
+                    
+                    if(x <= q_extremes[conditional_on]){
+                      return(ecdf_without[[conditional_on]](x))
+                      }else{
+                      return(min(0.9999, q_proba + (1-q_proba)*(1-(1+sign(alpha)*(x-q_extremes[conditional_on])/sd_epd[conditional_on]/(beta+kappa))^{-alpha})))
+                    }}, FUN.VALUE = 0.5)
+hist(db_unif_train[extreme_index], breaks = 50)
 
 set.seed(42)
-q_extremes_cond <- vapply(1:ncol(data_train), function(x){mean(cond_data[,x] <= q_extremes[x])}, FUN.VALUE = 1)
+q_extremes_cond <- vapply(1:ncol(data_for_fitting), function(x){mean(cond_data[extreme_index,x] <= q_extremes[x])}, FUN.VALUE = 1)
 
-ssmple <- RVineCondSim(target = conditional_on, samples = db_unif[extreme_index_test[1:200]], RVM = v_temp, nsub=100)
 
-GetPredictionResults(simulations = ssmple,
-                     conditional_data = cond_data,
-                     conditional_data_pred = cond_data_test,
-                     extreme_index_pred = extreme_index_test,
-                     extreme_quantiles = q_extremes,
-                     conditional_extreme_quantiles = q_extremes_cond)
+conditional_samples <-  vapply(ecdf(db_unif_train[extreme_index])(db_unif[extreme_index_test[1:300]]),
+                               FUN = function(x){return(min(max(x,0.001),0.999))}, 1.0)
+
+ssmple_h_1_c_1 <- RVineCondSim(target = conditional_on, 
+                       samples = conditional_samples,
+                       RVM = vines_air_pollution[[h_selected]][[conditional_on]], nsub=2000) # TODO extreme_index_test
+save(ssmple_h_1_c_1, file="ssmple_h_1_c_1")
+
+
+load("ssmple_h_12_c_2")
+
+
+#ssmple_2 <- ssmple
+ssmple_toadd
+
+testing_res <- GetPredictionResults(simulations = ssmple_h_12_c_2,
+                                     conditional_data = cond_data,
+                                     conditional_data_pred = cond_data_test,
+                                     extreme_index_pred = extreme_index_test,
+                                     extreme_quantiles = q_extremes,
+                                     conditional_extreme_quantiles = q_extremes_cond, ci = 2)
+
+for(x in testing_res){
+  cat(x$accuracy,',',sep='')
+  cat(x$sensitivity,',',sep='')
+  cat(x$specificity,',',sep='')
+ cat(x$n_extreme,',',sep='')
+ cat(x$n_extreme_found,',',sep='')
+ cat(x$n_not_extreme,',',sep='')
+ cat(x$n_not_extreme_found,'\n',sep='')
+  
+}
+
+
+
+testing_res$O3$n_extreme_found
+
+
+
 
 GetMCPredictions <- function(data_train, data_test, marginal, p.zero, h, conditional_on, bootstrap, vine, n_extreme=NA){
   alpha <- marginal$alpha
@@ -387,7 +460,7 @@ GetMCPredictions <- function(data_train, data_test, marginal, p.zero, h, conditi
                         min(0.9999,ecdf_without[[conditional_on]](q_extremes[conditional_on]) + 
                               (1-q_extremes[conditional_on])*(1-(1+sign(alpha)*(x-q_extremes[conditional_on])/sd_epd[conditional_on]/(beta+kappa))^{-alpha}))
                       }}, FUN.VALUE = 1)
-  q_extremes_cond <- vapply(1:ncol(data_train), function(x){mean(cond_data[,x] <= q_extremes[x])}, FUN.VALUE = 1)
+  q_extremes_cond <- vapply(1:ncol(data_train), function(x){mean(cond_data[extreme_index,x] <= q_extremes[x])}, FUN.VALUE = 1)
   
   cat('Bootstrap:\n')
   if(is.na(n_extreme)){
@@ -439,7 +512,7 @@ testing_predictions <- GetMCPredictions(data_train = data_for_fitting,
                                          vine=v_temp,
                                          bootstrap = 50,
                                          n_extreme = 500)
-
+testing_predictions$re
 
 
 for(var in 1:ncol(data_for_pred)){

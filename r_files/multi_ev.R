@@ -51,60 +51,126 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=
   exc <- makeExceedances(data = data, thresholds = thresholds, normalize = TRUE)
   for(i_agent in 1:n_vars){
       cat("Generating univ MLEs for", colnames(data)[i_agent], "...")
-      val_params[i_agent,] <- ev.trawl::GenerateParameters(data = exc[,i_agent],
-                                                           cluster.size = clusters_size[i_agent])
+
+    print(eva::gpdFit(exc[,i_agent][exc[,i_agent] > 0], 0.0))
+    val_params[i_agent,1:2] <- eva::gpdFit(exc[,i_agent][exc[,i_agent] > 0], 0.0)$par.sum$Estimate[2:1]
+    p <- length(which(exc[,i_agent] > 0))/length(exc[,i_agent])
+    val_params[i_agent,4] <- (1 - p^{val_params[i_agent,1]}) * val_params[i_agent,2]/abs(val_params[i_agent,1])
+    
+    val_params[i_agent, 3] <- ev.trawl::GetEstimateRho(alpha = 1/val_params[i_agent, 1],
+                                                       beta = val_params[i_agent, 2]/abs(val_params[i_agent, 1]) - val_params[i_agent, 4],
+                                                       kappa = val_params[i_agent, 4],
+                                                       cluster.size = 20,
+                                                       data = exc[,i_agent]) 
+    
+    val_params[i_agent, 3] <- (val_params[i_agent, 3])
+    
+    #val_params[i_agent, 3] <- val_copy[i,3]
+    
+    #val_params[i_agent, 3] <- log(val_params[i_agent, 3])
       cat(" done.\n")
       if(optim){
         cat("|---> Preparing optimisation...")
-        marginal_values <- exc[1:1000,i_agent] # TODO 1000!
-        marginal_times <- (1:n_rows)/n_rows
+        marginal_values <- exc[1:15000,i_agent] # TODO 1000!
+        marginal_times <- (1:length(marginal_values))
+        
         exp_params_names <- c("alpha", "beta", "rho", "kappa")
-        fixed_params_names <- c("alpha")
+        fixed_params_names <- c('alpha', 'beta', 'kappa')
         fixed_params_index <- which(exp_params_names %in% fixed_params_names)
-        
-        fn_to_optim <- function(x) {
-          return(-UnivariateFullPL(values = marginal_values, 
-                                   params = x, 
-                                   times = marginal_times,
-                                   delta = clusters_size[i_agent], 
-                                   model_vars_names = exp_params_names,
-                                   fixed_names = fixed_params_names,
-                                   fixed_params = x[fixed_params_index],
-                                   transformation = T))
-        }
-        lower <-c(1,
-                  0.01,
-                  0.1)
-        upper <-c(80,
-                  4,
-                  80)
-        # if(val_params[i_agent,1] < 0){
-        #   tmp_p <- lower[1]
-        #   lower[1] <- - upper[1]
-        #   upper[1] <- - tmp_p
-        # }
-        
         initial_guess <- list()
         for(j in 1:length(val_params[1,])){
           if(!(j %in% fixed_params_index)){
             initial_guess[[exp_params_names[j]]] <- val_params[i_agent,j] 
           }
         }
+        
+        fn_to_optim <- function(x){
+          x_list <- list(alpha=1/val_params[i_agent,1],
+                         beta=val_params[i_agent,2]/abs(val_params[i_agent,1]) - val_params[i_agent,4],
+                         rho=x,
+                         kappa=val_params[i_agent,4])
+
+          if(x_list[["beta"]] <= 0){
+            return(1e8)
+          }
+          
+          return(-log(abs(x[1])^{-3})  - 
+                   ParamsListFullPL(
+                    times = marginal_times, 
+                    values = marginal_values, 
+                    delta = clusters_size[i_agent],
+                    params = x_list, logscale = T, 
+                    transformation = T))
+        }
+        
+        
+        multiplier_bottom <- 0.8
+        multiplier_top <- 1.2
+        
+        # if(val_params[i_agent,1] > 0){
+        #   lower_b <-c(
+        #     0.9 * abs(val_params[i_agent, 1]),
+        #     multiplier_bottom * abs(val_params[i_agent, 2]),
+        #             0.001,
+        #             multiplier_bottom * abs(val_params[i_agent, 4]))
+        #   upper_b <-c(
+        #     1.1 * abs(val_params[i_agent, 1]),
+        #     multiplier_top * abs(val_params[i_agent, 2]) ,
+        #             5*val_params[i_agent, 3],
+        #     multiplier_top * abs(val_params[i_agent, 4]))
+        # }else{
+        #   lower_b <-c(
+        #     - multiplier_top * abs(val_params[i_agent, 1]),
+        #     -multiplier_top*abs(val_params[i_agent, 1]),
+        #     -4,
+        #     0.1)
+        #   upper_b <-c(
+        #     -multiplier_bottom * abs(val_params[i_agent, 1]),
+        #     multiplier_top * abs(val_params[i_agent, 2]),
+        #     -0.5,
+        #     multiplier_top * abs(val_params[i_agent, 2]))
+        # }
+        
+        lower_b <- exp(-4)
+        upper_b <- exp(1)
+        
         cat(" initialise...")
         time_to_cv <- proc.time()[3]
-        res <- stats::optim(fn_to_optim, 
-                            par = initial_guess,
+        cat('\n')
+        print(val_params[i_agent,])
+        print(upper_b)
+        print(lower_b)
+        # res <- DEoptim::DEoptim(fn = fn_to_optim,
+        #                         lower = lower_b,
+        #                         upper = upper_b,
+        #                         control = DEoptim::DEoptim.control(
+        #                           NP=100,
+        #                           itermax=3,
+        #                           strategy = 1)
+        #                         )$optim$bestmem
+        # res_old <- res
+        
+        #upper_b[3] <- min(4 * abs(res[3]), 0.3)
+        
+        res <- val_params[i_agent,3]
+        res <- stats::optim(fn_to_optim,
+                            par = res,
                             method = "L-BFGS-B",
-                            lower = lower, upper = upper,
-                            control = list(maxit=100, 
-                                           factr=1e13, 
-                                           trace=0)
+                            lower = lower_b, upper = upper_b,
+                            control = list(maxit=100,
+                                           factr=1e7,
+                                           trace=3)
                       )$par
+          
         cat("done in ", proc.time()[3]-time_to_cv, "s.\n", sep = "")
         res_concat <- rep(0, 4)
         res_concat[fixed_params_index] <- val_params[i_agent, fixed_params_index]
+        if(length(fixed_params_index) > 0){
         res_concat[-fixed_params_index] <- res
-        cat("old", val_params[i_agent, ] %>% as.vector,"\n")
+        }else{
+          res_concat <- res
+        }
+        cat("old", val_params[i_agent,] %>% as.vector,"\n")
         val_params[i_agent, ] <- res_concat
         cat("new",val_params[i_agent, ] %>% as.vector,"\n")
       }
@@ -292,9 +358,17 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
   print("thres")
   print(thres)
   
-  params <- findUnivariateParams(data = data, clusters_size = clusters_size, 
-                                 thresholds = thres, name = name, save = T, optim = optim) # TODO WARNING save?!
+  params <- findUnivariateParams(data = data, clusters_size = clusters_size,
+                                  thresholds = thres, name = name, save = T, optim = optim) # TODO WARNING save?!
   print(params)
+  # params <- matrix(0, ncol=4, nrow=6)
+  # params[1,] <- c(8.07,14.7,0.26,6.62)
+  # params[2,] <- c(4.07,4.12,0.04,4.50)
+  # params[3,] <- c(10.1,20.4,1.90,7.02)
+  # params[4,] <- c(7.73,13.5,0.15,6.38)
+  # params[5,] <- c(3.11,2.20,0.03,3.56)
+  # params[6,] <- c(8.17,13.6,0.27,6.01)
+  # 
   exceedeances <- makeExceedances(data = data, thresholds = thres, normalize = T)
 
   # TODO refactor
@@ -634,3 +708,24 @@ computeTRONwithLists <- function(data, horizons, list_vines, list_of_matrix, N=1
 }
 
 
+#' @example XSRKtoABRK(params)
+XSRKtoABRK <- function(params){
+  # params should be (xi, sigma, rho, kappa)
+  if(length(params) != 4) stop('In', match.call[1], 'Wrong dims: should be 4.')
+  abrk <- params
+  abrk[1] <- 1.0 / abrk[1]
+  abrk[2] <- params[2]/abs(params[1]) - params[4]
+  
+  return(abrk)
+}
+
+#' @example XSRKtoABRK(params)
+ABRKtoXSRK <- function(params){
+  # params should be (alpha, beta, rho, kappa)
+  if(length(params) != 4) stop('In', match.call[1], 'Wrong dims: should be 4.')
+  abrk <- params
+  abrk[1] <- 1.0 / abrk[1]
+  abrk[2] <- (params[2] + params[4])/abs(params[1])
+  
+  return(abrk)
+}

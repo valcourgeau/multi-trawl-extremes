@@ -48,13 +48,14 @@ dim(core_energy_data)
 core_energy_data_std <- apply(core_energy_data, MARGIN = 2,
                           FUN = function(x){(x)/sd(x)})
 
-stl_clean_aep <- stl(core_energy_data_std[,91] %>% (function(x){ts(x, frequency = 24)}), s.window = 24, t.window = 24*365/4)
-plot(stl_clean_aep)
+stl_clean_aep <- stl(core_energy_data_std[,88] %>% (function(x){ts(x, frequency = 24)}), s.window = 1, t.window = 24*365/4)
+plot(stl_clean_aep, main="STL split for daily seasonality and quarterly trends")
+for(v_x in seq(0,1500,by=365)){abline(v=v_x, lty=2, col='darkgrey')}
 
 clean_energy_data <- datasetSTLCleaning(data = core_energy_data_std, 
                                         frequency = 24,
                                         trend_window = round(24*365/4),
-                                        season_window = 24)
+                                        season_window = 1)
 clean_energy_data <- datasetCleaning(data = clean_energy_data, dates = dates)
 
 tags_west_coast <- c(
@@ -112,9 +113,9 @@ tron_east_light <- computeTRON(data = clean_east_light_data,
                                n_samples = 40000,
                                save = T,
                                sparse = F,
-                               name_matrices_file = paste("matrix_east_light_1_to_72_2nd"),
-                               name_vine_file = paste("vine_east_light_1_to_72_2nd"),
-                               name_tron_file = paste("tron_east_ligh_1_to_72_2nd"))
+                               name_matrices_file = paste("matrix_east_light_1_to_72_3rd"),
+                               name_vine_file = paste("vine_east_light_1_to_72_3rd"),
+                               name_tron_file = paste("tron_east_ligh_1_to_72_3rd"))
 
 for(h in horizons_guess){
   print(t(tron_east_light[[h]]$mean[1:5,19]) %>% (function(x){round(x,2)}))
