@@ -190,6 +190,205 @@ findUnivariateParams <- function(data, clusters_size, thresholds, optim=T, name=
   return(val_params)
 }
 
+CustomMarginalMLE <- function(data){
+  init_guess <- eva::gpdFit(data, 0.0)$par.sum$Estimate
+  
+  fn_mle <- function(par){
+    data_for_mle <- data
+    p <- length(which(data_for_mle>0)) / length(data_for_mle)
+    kap <- (1-p^{par[1]})*par[2]/abs(par[1])
+    p_non_zero <- 1-(1+kap/(par[2]/abs(par[1])-kap))^{-par[1]}
+    like <- eva::dgpd(data_for_mle[data_for_mle>0.0], scale = par[2], shape=par[1],
+                      loc=0, log.d = F) * p_non_zero
+    
+    log.like <- sum(log(like)) + length(data_for_mle == 0.0) * log(1-p_non_zero)
+    return(-log.like)
+  }
+  return(stats::optim(par = c(0.1,2.7), fn_mle, method='L-BFGS-B', lower=c(1e-3, 0.5), upper=c(2,20))$par)
+}
+
+#' Wrapper from \code{ev.trawl} GenerateParameters to fit univariate latent
+#' trawl extreme values model.
+#'
+#' @param data cleaned dataset.
+#' @param clusters_size Extreme clusters size (integer) vector .
+#' @param thresholds Thresholds values for extremes.
+#' @param optim Logical (default=TRUE). Whether to execute BFGS optimisation
+#'   with fixed alpha.
+#' @param name a string for the file name once saved. Default is NA, if NA, it
+#'   creates a timestamp format.
+#' @param save Logical flag (default is TRUE). Whether to save the result as
+#'   .RData.
+#' @return Set of thresholds values as large as \code{data} after which values
+#'   in data are considered extremes.
+findUnivariateParamsv2 <- function(data, clusters_size, thresholds, optim=T, name=NA, save=T){
+  n_vars <- length(data[1,])
+  n_rows <- length(data[,1])
+  
+  # temp_params <-vapply(rlist::list.load("2019-3-1-15-43-27_params.RData"), as.vector, c(1,1,1,1)) %>% t
+  # print(dim(temp_params))
+  # return(vapply(rlist::list.load("2019-3-1-15-43-27_params.RData"), as.vector, c(1,1,1,1)) %>% t)
+  # 
+  if(any(clusters_size <= 0)){
+    stop('clusters_size should have positive entries.')
+  }
+  
+  if(length(clusters_size) == 1){
+    clusters_size <- rep(clusters_size, n_vars)
+  }else{
+    if(n_vars != length(clusters_size)){
+      stop('clusters_size should be either a scalar to apply to every column or as large as data.')
+    }
+  }
+  
+  val_params <- matrix(0, nrow = n_vars, ncol = 4)
+  exc <- makeExceedances(data = data, thresholds = thresholds, normalize = TRUE)
+  for(i_agent in 1:n_vars){
+    cat("Generating univ MLEs for", colnames(data)[i_agent], "...")
+    
+    #print(eva::gpdFit(exc[,i_agent][exc[,i_agent] > 0], 0.0))
+    #val_params[i_agent,1:2] <- eva::gpdFit(exc[,i_agent][exc[,i_agent] > 0], 0.0)$par.sum$Estimate[2:1]
+    
+    val_params[i_agent,1:2] <- CustomMarginalMLE(exc[,i_agent])
+
+    p <- length(which(exc[,i_agent] > 0))/length(exc[,i_agent])
+    val_params[i_agent,4] <- (1 - p^{val_params[i_agent,1]}) * val_params[i_agent,2]/abs(val_params[i_agent,1])
+    
+    val_params[i_agent, 3] <- ev.trawl::GetEstimateRho(alpha = 1/val_params[i_agent, 1],
+                                                       beta = val_params[i_agent, 2]/abs(val_params[i_agent, 1]) - val_params[i_agent, 4],
+                                                       kappa = val_params[i_agent, 4],
+                                                       cluster.size = 20,
+                                                       data = exc[,i_agent]) 
+    
+    val_params[i_agent, 3] <- val_params[i_agent, 3]
+  
+    cat(" done.\n")
+    if(optim){
+      cat("|---> Preparing optimisation...")
+      marginal_values <- exc[1:min(15000, n_rows), i_agent] # TODO 1000!
+      marginal_times <- 1:length(marginal_values)
+      
+      exp_params_names <- c("alpha", "beta", "rho", "kappa")
+      fixed_params_names <- c('alpha', 'beta', 'kappa')
+      fixed_params_index <- which(exp_params_names %in% fixed_params_names)
+      initial_guess <- list()
+      for(j in 1:length(val_params[1,])){
+        if(!(j %in% fixed_params_index)){
+          initial_guess[[exp_params_names[j]]] <- val_params[i_agent,j] 
+        }
+      }
+      
+      fn_to_optim <- function(x){
+        x_list <- list(alpha=1/val_params[i_agent,1],
+                       beta=val_params[i_agent,2]/abs(val_params[i_agent,1]) - val_params[i_agent,4],
+                       rho=x,
+                       kappa=val_params[i_agent,4])
+        
+        if(x_list[["beta"]] <= 0){
+          return(1e8)
+        }
+        
+        return(-log(abs(x_list[['alpha']])^{-3})  - 
+                 ev.trawl::ParamsListFullPL(
+                   times = marginal_times, 
+                   values = marginal_values, 
+                   delta = clusters_size[i_agent],
+                   params = x_list, logscale = T, 
+                   transformation = T))
+      }
+      
+      plot(seq(0.001, 1, length.out = 10),
+           vapply(seq(0.001, 1, length.out = 10), fn_to_optim, 1))
+      
+      
+      multiplier_bottom <- 0.8
+      multiplier_top <- 1.2
+      
+      # if(val_params[i_agent,1] > 0){
+      #   lower_b <-c(
+      #     0.9 * abs(val_params[i_agent, 1]),
+      #     multiplier_bottom * abs(val_params[i_agent, 2]),
+      #             0.001,
+      #             multiplier_bottom * abs(val_params[i_agent, 4]))
+      #   upper_b <-c(
+      #     1.1 * abs(val_params[i_agent, 1]),
+      #     multiplier_top * abs(val_params[i_agent, 2]) ,
+      #             5*val_params[i_agent, 3],
+      #     multiplier_top * abs(val_params[i_agent, 4]))
+      # }else{
+      #   lower_b <-c(
+      #     - multiplier_top * abs(val_params[i_agent, 1]),
+      #     -multiplier_top*abs(val_params[i_agent, 1]),
+      #     -4,
+      #     0.1)
+      #   upper_b <-c(
+      #     -multiplier_bottom * abs(val_params[i_agent, 1]),
+      #     multiplier_top * abs(val_params[i_agent, 2]),
+      #     -0.5,
+      #     multiplier_top * abs(val_params[i_agent, 2]))
+      # }
+      
+      lower_b <- exp(-4)
+      upper_b <- exp(1)
+      
+      cat(" initialise...")
+      time_to_cv <- proc.time()[3]
+      cat('\n')
+      print(val_params[i_agent,])
+      print(upper_b)
+      print(lower_b)
+      # res <- DEoptim::DEoptim(fn = fn_to_optim,
+      #                         lower = lower_b,
+      #                         upper = upper_b,
+      #                         control = DEoptim::DEoptim.control(
+      #                           NP=100,
+      #                           itermax=3,
+      #                           strategy = 1)
+      #                         )$optim$bestmem
+      # res_old <- res
+      
+      #upper_b[3] <- min(4 * abs(res[3]), 0.3)
+      
+      res <- val_params[i_agent,3]
+      res <- stats::optim(fn = fn_to_optim,
+                          par = res,
+                          method = "L-BFGS-B",
+                          lower = lower_b, upper = upper_b,
+                          control = list(maxit=100,
+                                         factr=1e7,
+                                         trace=3)
+      )$par
+      
+      cat("done in ", proc.time()[3]-time_to_cv, "s.\n", sep = "")
+      res_concat <- rep(0, 4)
+      res_concat[fixed_params_index] <- val_params[i_agent, fixed_params_index]
+      if(length(fixed_params_index) > 0){
+        res_concat[-fixed_params_index] <- res
+      }else{
+        res_concat <- res
+      }
+      cat("old", val_params[i_agent,] %>% as.vector,"\n")
+      val_params[i_agent, 3] <- res
+      cat("new",val_params[i_agent, ] %>% as.vector,"\n")
+    }
+    
+  }
+  
+  cols_names <- colnames(data)
+  if(save){
+    val_params_list <- list()
+    for(i in 1:nrow(val_params)){
+      val_params_list[[cols_names[i]]] <- val_params[i,]
+    }
+    rlist::list.save(val_params_list, 
+                     makeFileName(file_name = name, tag = "_params", extension = ".RData") )
+  }
+  
+  return(val_params)
+}
+
+
+
 
 #' This function returns the threshold(s) corresponding the quantile of probability p.exceed
 #' @param data cleaned dataset
@@ -358,9 +557,12 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
   print("thres")
   print(thres)
   
-  params <- findUnivariateParams(data = data, clusters_size = clusters_size,
-                                  thresholds = thres, name = name, save = T, optim = optim) # TODO WARNING save?!
-  print(params)
+  # params <- findUnivariateParams(data = data, clusters_size = clusters_size,
+  #                                 thresholds = thres, name = name, save = T, optim = optim) # TODO WARNING save?!
+  params <- val_p3
+  params[,1] <- 1 / val_p3[,1]
+  params[,2] <- val_p3[,2] / abs(val_p3[,1])- val_p3[,4]
+  params[,4] <- val_p3[,4]
   # params <- matrix(0, ncol=4, nrow=6)
   # params[1,] <- c(8.07,14.7,0.26,6.62)
   # params[2,] <- c(4.07,4.12,0.04,4.50)
@@ -406,8 +608,9 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
                          nrow = length(which(exceedeances[1:(n_samples-h), i] > 0)),
                          ncol = n_vars+1)
       # filtering the i-th eCDF column with extremes 
+      print(head(exceedeances_cdf_ecdf[,1]))
       temp <- exceedeances_cdf_ecdf[which(exceedeances[1:(n_samples-h), i] > 0), i]
-      
+
       # addting those values in the nvars + 1 column
       mat_temp[,n_vars+1] <- ecdf(temp)(temp)
       
@@ -644,7 +847,7 @@ computeTRONwithListSingle <- function(vine, quantile_values, N, sparse){
   # exporting mean and sd
   results <- list()
   results[["mean"]] <- t(apply(vine_sim, MARGIN = 2, FUN = mean, na.rm=TRUE))
-  results[["sd"]] <- t(apply(vine_sim, MARGIN = 2, FUN = sd, na.rm=TRUE))/sqrt(length(which(!is.na(vine_sim[,1]))) - 1)
+  results[["sd"]] <- t(apply(vine_sim, MARGIN = 2, FUN = sd, na.rm=TRUE))#/sqrt(length(which(!is.na(vine_sim[,1]))) - 1)
   
   return(results)
 }

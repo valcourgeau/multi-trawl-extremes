@@ -84,19 +84,97 @@ s.clusters <- c(5, 5, 4, 4, 4, 4)
 # par(mfrow=c(1,1))
 # val_params
 
+horizon_set <- c(1,2,3,4,5,6,12,24)
+computeTRON(data = stlpd[,-c(1:3)], rep(0.95,6), horizons = horizon_set, 
+            clusters = s.clusters, n_samples = 1, save = T, 'air_pollution_rerun_3')
 
-computeTRON(data = stlpd[,-c(1:3)], rep(0.95,6), horizons = 1, 
-            clusters = s.clusters, n_samples = 1, conditional_on = 3, save = F)
-
-val_p3 <- findUnivariateParams(data = epd, 
+val_pex <- findUnivariateParams(data = epd, 
                      clusters_size = s.clusters, 
                      thresholds= rep(0, 6), 
                      optim=T, 
                      name=NA, 
                      save=T)
+# air_pollution_model_params <- val_p3 
+# write.table(air_pollution_model_params, '~/GitHub/multi-trawl-extremes/results/air_pollution_model_params')
 
-N <- 5
+computeTRON(data = )
+
+
+
+
+N <- 1
+n.timestamps <- 10000
 sim_results <- array(0, c(n_vars,N,4))
+
+times <- 1:n.timestamps
+marg.dist <- "gamma"
+n <- 1
+transformation <- FALSE
+trawl.function <- "exp"
+
+pb <- txtProgressBar(min = 1, max = N*n_vars, style = 3, width = 50)
+sim_res2 <- vapply(1:N,
+           function(k){
+             sim_episode <- vapply(1:n_vars,
+                                   function(i){
+                                     alpha_t <- 1/val_p3[i,1]
+                                     beta_t <- val_p3[i,2]/val_p3[i,1] - val_p3[i,4]
+                                     kappa_t <- val_p3[i,4]
+                                     rho_t <- val_p3[i,3]
+                                     sim_data <- ev.trawl::rtrawl(alpha = alpha_t, beta = beta_t, 
+                                                                  kappa = 0.0, times = times, n = 1,
+                                                                  marg.dist = marg.dist, rho = rho_t, 
+                                                                  trawl.function = trawl.function, 
+                                                                  transformation = F) # need to tweak beta and kappa
+                                     gen_exceedances <- rep(0, length(times))
+                                     
+                                     unif_samples <- stats::runif(n = length(times))
+                                     prob_zero <- 1 - exp(-abs(kappa_t) * sim_data)
+                                     which_zero <- which(prob_zero <= unif_samples)
+                                     
+                                     print(summary(sim_data[-which_zero]))
+                                     gen_exceedances[-which_zero] <-  stats::rexp(n = length(sim_data[-which_zero]),
+                                                                                  rate = sim_data[-which_zero])
+                                     setTxtProgressBar(pb, k*(i-1)+i)
+                                     return(gen_exceedances[1:(length(times)-1000)])}, 
+                                   rep(0, length(times)-1000))
+             
+             return(as.data.frame(sim_episode) %>% as.matrix)
+           },
+           matrix(0, ncol = n_vars, nrow = length(times)-1000)) 
+close(pb)
+acf(sim_res2[,1,1], type = 'cov')
+acf(sim_episode[,1])
+forecast::Acf(sim_res2[,1,1])
+
+hist(sim_res2[,1,1][sim_res2[,1,1]>0],probability = T)
+lines(0:3000/100, eva::dgpd(0:3000/100, scale=val_p3[i,2], shape = val_p3[i,1]))
+CustomMarginalMLE(sim_res2[,1,1])
+
+pb <- txtProgressBar(min = 0, max = N, style = 3, width = 50)
+sim_fit <- vapply(1:N,
+                  function(k){
+                    sim_episode <- findUnivariateParamsv2(data =sim_res2[,,k] %>% as.data.frame %>% as.matrix, 
+                                                        clusters_size = s.clusters, 
+                                                        thresholds= rep(0, n_vars), 
+                                                        optim=T, 
+                                                        name=NA, 
+                                                        save=T)
+                    setTxtProgressBar(pb, k)
+                    return(sim_episode)
+                  },
+                  matrix(0, ncol = n_vars, nrow = length(times))) 
+close(pb)
+for(i in 1:6){
+  ev.trawl::rtrawl(alpha = 1/val_p3[i,1], beta = val_p3[i,2]/val_p3[i,1] - val_p3[i,4], 
+                   kappa = 0, times = 1:1500, n = 1,
+                   marg.dist = marg.dist, rho = val_p3[i,3], 
+                   trawl.function = trawl.function, transformation = F)[1:1000] %>% density %>% plot
+  lines(0:1000/1000, dgamma(x = 0:1000/1000, shape = 1/val_p3[i,1], rate = val_p3[i,2]/val_p3[i,1] - val_p3[i,4]))
+}
+
+
+
 for(i in 1:6){
   alpha <- 1/val_p3[i,1]
   beta <- val_p3[i,2]/val_p3[i,1]  - val_p3[i,4]
@@ -113,12 +191,12 @@ for(i in 1:6){
     sim_data <- rlexceed(alpha = alpha, beta = beta, kappa = kappa, rho = rho, times = times,
                    marg.dist = marg.dist, n = n, transformation = transformation,
                    trawl.function= trawl.function)
-    sim_results[i,k,] <- findUnivariateParams(data = as.matrix(sim_data),
-                           clusters_size = s.clusters[i],
-                           thresholds= 0,
-                           optim=T,
-                           name=NA,
-                           save=T)
+    # sim_results[i,k,] <- findUnivariateParams(data = as.matrix(sim_data),
+    #                        clusters_size = s.clusters[i],
+    #                        thresholds= 0,
+    #                        optim=T,
+    #                        name=NA,
+    #                        save=T)
   }
 }
 
