@@ -88,22 +88,65 @@ horizon_set <- c(1,2,3,4,5,6,12,24)
 computeTRON(data = stlpd[,-c(1:3)], rep(0.95,6), horizons = horizon_set, 
             clusters = s.clusters, n_samples = 1, save = T, 'air_pollution_rerun_3')
 
-val_pex <- findUnivariateParams(data = epd, 
-                     clusters_size = s.clusters, 
-                     thresholds= rep(0, 6), 
+
+
+val_pex <- findUnivariateParams(data = epd[,3:4], 
+                     clusters_size = s.clusters[3:4], 
+                     thresholds= rep(0, 2), 
                      optim=T, 
                      name=NA, 
                      save=T)
+library(np)
+BlockBootstrap <- function(exceedances, clusters, n_bootstrap, patton=F){
+  n_row <- nrow(exceedances)
+  
+  block_length <- if(patton) 15 * np::b.star(epd[,1], round = T)[1,1] %>% as.numeric  else  5 * n_row^{2/3} %>% round
+    
+  boot_res <- array(dim=c(n_bootstrap, ncol(exceedances), 4))
+  index_bloc <- sample(1:(n_row-block_length-1), n_bootstrap, F)
+  for(index_boot in 1:n_bootstrap){
+    cat('------------- BOOTSTRAP N', index_boot, '\n')
+    boot_res[index_boot,,] <- findUnivariateParamsv2(data = exceedances[index_bloc[index_boot]:(index_bloc[index_boot]+block_length),] %>% as.data.frame() %>% as.matrix, 
+                                                clusters_size = clusters, 
+                                                thresholds= rep(0, ncol(exceedances)), 
+                                                optim=T, 
+                                                name=NA, 
+                                                save=F)
+  }
+  
+  return(boot_res)
+}
+
+boot_results_ap <- BlockBootstrap(epd, s.clusters, 100, T)
+
+GetSD <- function(boostrapped_values, mc=F){
+  dim_boot <- dim(boostrapped_values) # n_boot, n_vars, n_params
+  n_boot <- dim_boot[1]
+  n_vars <- dim_boot[2]
+  n_params <- dim_boot[3]
+  res <- matrix(0, nrow=n_vars, ncol=n_params)
+  for(var_number in 1:n_vars){
+    res[var_number,] <- apply(boostrapped_values[,var_number,], FUN = sd, MARGIN = 2)
+  }
+  
+  if(mc){
+    return(res/sqrt(n_boot))
+  }else{
+    return(res)  
+  }
+}
+GetSD(boot_results_ap, mc=T)
+
 # air_pollution_model_params <- val_p3 
 # write.table(air_pollution_model_params, '~/GitHub/multi-trawl-extremes/results/air_pollution_model_params')
-
-computeTRON(data = )
-
-
+val_p3 <- read.table( '~/GitHub/multi-trawl-extremes/results/air_pollution_model_params')
+#computeTRON(data = )
 
 
+
+set.seed(42)
 N <- 1
-n.timestamps <- 10000
+n.timestamps <- 5000
 sim_results <- array(0, c(n_vars,N,4))
 
 times <- 1:n.timestamps
@@ -111,37 +154,168 @@ marg.dist <- "gamma"
 n <- 1
 transformation <- FALSE
 trawl.function <- "exp"
-
-pb <- txtProgressBar(min = 1, max = N*n_vars, style = 3, width = 50)
+n_vars_sim <- 6
+pb <- txtProgressBar(min = 1, max = N*n_vars_sim, style = 3, width = 50)
+par(mfrow=c(6,3))
 sim_res2 <- vapply(1:N,
            function(k){
-             sim_episode <- vapply(1:n_vars,
+             sim_episode <- vapply(1:n_vars_sim,
                                    function(i){
                                      alpha_t <- 1/val_p3[i,1]
                                      beta_t <- val_p3[i,2]/val_p3[i,1] - val_p3[i,4]
                                      kappa_t <- val_p3[i,4]
+                                     #kappa_t <- 1
                                      rho_t <- val_p3[i,3]
+                                     # par(mfrow=c(2,2))
+                                     cat('\n proba of non-zero:', (1+kappa_t/beta_t)^{-alpha_t}, '\n')
+                                     theoretical_prob_exc <- (1+kappa_t/beta_t)^{-alpha_t}
                                      sim_data <- ev.trawl::rtrawl(alpha = alpha_t, beta = beta_t, 
                                                                   kappa = 0.0, times = times, n = 1,
                                                                   marg.dist = marg.dist, rho = rho_t, 
                                                                   trawl.function = trawl.function, 
                                                                   transformation = F) # need to tweak beta and kappa
+                                     sim_data_unif <- ev.trawl::rtrawl(alpha = alpha_t, beta = beta_t, 
+                                                                  kappa = 0.0, times = times, n = 1,
+                                                                  marg.dist = marg.dist, rho = rho_t, 
+                                                                  trawl.function = trawl.function, 
+                                                                  transformation = F) # need to tweak beta and kappa
+                                     # used_for_probs <- vapply(1:10,
+                                     #        function(x){
+                                     #          return(ev.trawl::rtrawl(alpha = alpha_t, beta = beta_t, 
+                                     #                                  kappa = 0.0, times = times, n = 1,
+                                     #                                  marg.dist = marg.dist, rho = rho_t, 
+                                     #                                  trawl.function = trawl.function, 
+                                     #                                  transformation = F))
+                                     #        }, rep(0, length(times)))
+                                     
+                                     
                                      gen_exceedances <- rep(0, length(times))
                                      
                                      unif_samples <- stats::runif(n = length(times))
                                      prob_zero <- 1 - exp(-abs(kappa_t) * sim_data)
-                                     which_zero <- which(prob_zero <= unif_samples)
+                                     # acf(pgamma(sim_data, shape = alpha_t, rate = beta_t))
+                                     # which_zero <- which((1-theoretical_prob_exc) >= pgamma(sim_data_unif, shape = alpha_t, rate = beta_t))
+                                     which_zero <- which(prob_zero >= pgamma(sim_data_unif, shape = alpha_t, rate = beta_t))
                                      
-                                     print(summary(sim_data[-which_zero]))
+                                     # for(line_index in 1:length(times)){
+                                     #   # hist(prob_zero, probability = T, ylab='probability')
+                                     #   # plot(prob_zero, main = 'probability being zero', 
+                                     #        # ylab='probability', type='l')
+                                     #   prob_zero
+                                     #   which_zero <- which(prob_zero >= unif_samples)
+                                     #   
+                                     #   
+                                     #   used_for_probs_trf <- used_for_probs
+                                     #   used_for_probs_trf[which_zero,] <- 1 - exp(-abs(kappa_t) * used_for_probs[which_zero,])
+                                     #   used_for_probs_trf[-which_zero,] <- exp(-abs(kappa_t) * used_for_probs[-which_zero,])
+                                     #   
+                                     #   used_for_probs_prod <- rbind(rep(1.0, ncol(used_for_probs_trf)),
+                                     #                               used_for_probs_trf)
+                                     #   used_for_probs_prod <- apply(used_for_probs_prod, MARGIN = 2, FUN = cumprod) # col-wise proba
+                                     #   used_for_probs_prod <- used_for_probs_prod[-nrow(used_for_probs_prod),] # delete last row as useless
+                                     #   used_for_probs_prod <- (rowSums(used_for_probs_prod * used_for_probs_trf) + 1e-8) / (rowSums(used_for_probs_prod) + 1e-8) # proba k+1
+                                     #   # print(dim(used_for_probs_prod))
+                                     #   print('proba conditional:')
+                                     #   print(summary(used_for_probs_prod))
+                                     #   print('----')
+                                     #   used_for_probs_prod <- as.vector(used_for_probs_prod)
+                                     #   print(length(used_for_probs_prod))
+                                     #   which_zero <- which(used_for_probs_prod >= unif_samples)
+                                     #   
+                                     #   # print(summary(prob_zero))
+                                     #   # print(summary(sim_data[-which_zero]))
+                                     #   # plot(sim_data[1:(length(times)-1000)], main = 'Trawl', type='l',
+                                     #        # ylab='trawl value'c
+                                     # }
                                      gen_exceedances[-which_zero] <-  stats::rexp(n = length(sim_data[-which_zero]),
                                                                                   rate = sim_data[-which_zero])
+                                     gen_exceedances <- gen_exceedances[1:(length(times)-1000)]
+                                     cat('Prob non-zero:', length(which(gen_exceedances > 0.0))/length(gen_exceedances), '\n')
+                                     print(summary(gen_exceedances[-which_zero]))
+                                     acf(gen_exceedances, main = paste('Exceedances ACF', colnames(epd)[i]))
+                                     points(0:10, 
+                                           vapply(0:10, function(h){acf_trawl(h=h, alpha = alpha_t, 
+                                                                              beta = beta_t, rho = rho_t, 
+                                                                              kappa = kappa_t, delta = 0.1,
+                                                                              end_seq = 80)}, 1),
+                                           col = 'red', cex=1.2)
+                                     lines(0:20, vapply(0:20, function(l){CountCoPositive(gen_exceedances,k=l,demean = T)/
+                                         CountCoPositive(gen_exceedances,k=0,demean = T)}, 1), type='b',
+                                           col = colour_palette[i], cex=2)
+                                     
+                                     # acf(sim_data[1:(length(times)-1000)], main = paste('Trawl ACF', colnames(epd)[i]))
+                                     # points(0:10, 
+                                     #        vapply(0:10, function(h){exp(-rho_t*h)}, 1),
+                                     #        col = 'red', cex=1.2)
+                                     
+                                     # plot(gen_exceedances[1:(length(times)-1000)], main = 'Non-zero and zero exceedances',
+                                     #    type='l', ylab = 'exceedances values')
+                                     # plot(sim_data, main = 'Non-zero and zero trawls',
+                                     #      type='l', ylab = 'exceedances values')
+                                     
+                                     
+                                     print(eva::gpdFit(gen_exceedances[gen_exceedances>0.0], threshold = 0.0))
+                                     hist(gen_exceedances[gen_exceedances>0.0], breaks = 100, probability = T)
+                                     lines(0:1000/100, eva::dgpd(0:1000/100, shape=val_p3[i,1], scale = val_p3[i,2], loc = 0.0), col = 'red')
+                                     
+                                     hist(sim_data[1:(length(times)-1000)], probability = T, breaks=100)
+                                     lines(0:1000/100, dgamma(0:1000/100, shape = alpha_t, rate = beta_t), col = 'red')
+                                     
                                      setTxtProgressBar(pb, k*(i-1)+i)
-                                     return(gen_exceedances[1:(length(times)-1000)])}, 
-                                   rep(0, length(times)-1000))
+                                     return(gen_exceedances)},
+                                     rep(0, length(times)-1000))
+                                     # return(gen_exceedances[1:(length(times)-1000)])}, 
+                                     # rep(0, length(times)-1000))
              
              return(as.data.frame(sim_episode) %>% as.matrix)
            },
-           matrix(0, ncol = n_vars, nrow = length(times)-1000)) 
+           matrix(0, ncol = n_vars_sim, nrow = length(times)-1000)) 
+
+CountCoPositive <- function(x, k, proportion=T, demean=F){
+  x_bis <- x[(k+1):length(x)]
+  x <- x[1:(length(x)-k)]
+  assertthat::are_equal(length(x), length(x_bis))
+  if(proportion){
+    if(demean){
+      return(sum((abs(x*x_bis)> 0)) / (length(x)-k) - mean(x>0)^2)
+    }else{
+      return(sum((abs(x*x_bis)> 0)) / (length(x)-k))
+    }
+  }else{
+    if(demean){
+      return(sum((abs(x*x_bis)> 0))-mean(x>0)^2)
+    }else{
+      return(sum((abs(x*x_bis)> 0)))
+    }
+  }
+}
+
+library("RColorBrewer")
+display.brewer.all()
+colour_palette <- brewer.pal(n = 6, name = 'RdYlGn')
+
+par(mfrow=c(1,1))
+plot(0:20, vapply(0:20, function(l){CountCoPositive(sim_res2[,1,1],k=l)}/CountCoPositive(sim_res2[,i,1],k=0), 1), 
+     type='b', ylab = 'Proportion of co-extremes', main = 'With Uniform from integral-transformed Gamma',
+     xlab = 'k', col = colour_palette[1], cex=2, cex.lab=1.5)
+i <- 1
+lines(0:20, vapply(0:20, function(l){acf_trawl(l, alpha = 1/val_p3[i,1], beta = val_p3[i,2]/val_p3[i,1] - val_p3[i,4],
+                                               rho = val_p3[i,3], kappa = val_p3[i,3])}, 1), type='b',
+      col = colour_palette[i], cex=2, lty=4)
+for(i in 2:6){
+  lines(0:20, vapply(0:20, function(l){CountCoPositive(sim_res2[,i,1],k=l)/CountCoPositive(sim_res2[,i,1],k=0)}, 1), type='b',
+        col = colour_palette[i], cex=2)
+  lines(0:20, vapply(0:20, function(l){acf_trawl(l, alpha = 1/val_p3[i,1], beta = val_p3[i,2]/val_p3[i,1] - val_p3[i,4],
+                                                 rho = val_p3[i,3], kappa = val_p3[i,3])}, 1), type='b',
+        col = colour_palette[i], cex=2, lty=4)
+}
+legend(10, 0.05, colnames((epd)),
+       text.col = colour_palette,  pch=1, lty=1, cex = 2, col = colour_palette, 
+       merge = TRUE, bg = "white")
+
+acf(sim_res2[,6,1])
+lines(0:15, exp(-val_p3[6,3]*0:15))
+
 close(pb)
 acf(sim_res2[,1,1], type = 'cov')
 acf(sim_episode[,1])

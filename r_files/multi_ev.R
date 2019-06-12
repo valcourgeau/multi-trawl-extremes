@@ -297,8 +297,8 @@ findUnivariateParamsv2 <- function(data, clusters_size, thresholds, optim=T, nam
                    transformation = T))
       }
       
-      plot(seq(0.001, 1, length.out = 10),
-           vapply(seq(0.001, 1, length.out = 10), fn_to_optim, 1))
+      # plot(seq(0.001, 1, length.out = 10),
+      #      vapply(seq(0.001, 1, length.out = 10), fn_to_optim, 1))
       
       
       multiplier_bottom <- 0.8
@@ -356,7 +356,7 @@ findUnivariateParamsv2 <- function(data, clusters_size, thresholds, optim=T, nam
                           lower = lower_b, upper = upper_b,
                           control = list(maxit=100,
                                          factr=1e7,
-                                         trace=3)
+                                         trace=0)
       )$par
       
       cat("done in ", proc.time()[3]-time_to_cv, "s.\n", sep = "")
@@ -557,12 +557,21 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
   print("thres")
   print(thres)
   
-  # params <- findUnivariateParams(data = data, clusters_size = clusters_size,
+  # params <- findUnivariateParamsv2(data = data, clusters_size = clusters_size,
   #                                 thresholds = thres, name = name, save = T, optim = optim) # TODO WARNING save?!
-  params <- val_p3
-  params[,1] <- 1 / val_p3[,1]
-  params[,2] <- val_p3[,2] / abs(val_p3[,1])- val_p3[,4]
-  params[,4] <- val_p3[,4]
+  # write.table(params, "energy_weather_params")
+  params <- read.table('energy_weather_params')
+  params_copy <- params
+  params_copy[,1] <- 1 / params[,1]
+  params_copy[,2] <- params[,2] / params[,1] - params[,4]
+  params_copy[,4] <- params[,4]
+  
+  params <- params_copy
+  
+  #params <- val_p3
+  # params[,1] <- 1 / val_p3[,1]
+  # params[,2] <- val_p3[,2] / abs(val_p3[,1])- val_p3[,4]
+  # params[,4] <- val_p3[,4]
   # params <- matrix(0, ncol=4, nrow=6)
   # params[1,] <- c(8.07,14.7,0.26,6.62)
   # params[2,] <- c(4.07,4.12,0.04,4.50)
@@ -617,6 +626,12 @@ makeConditionalMatrices <- function(data, p.zeroes, conditional_on=NA,
       # looping on the first nvars columns
       for(j in 1:n_vars){
         # filtering data of j-th vars when i-th is extreme h timesteps before
+        # print(n_samples)
+        # print(h)
+        # print(max(which(exceedeances[1:(n_samples-h), i] > 0)+h))
+        # print(min(which(exceedeances[1:(n_samples-h), i] > 0)+h))
+        # print(dim(exceedeances_cdf_ecdf))
+        
         data_j <- exceedeances_cdf_ecdf[which(exceedeances[1:(n_samples-h), i] > 0)+h, j]
         # computing the probability that j-th was an extreme as well 
         # h timesteps after i-th was an extreme
@@ -786,7 +801,7 @@ computeTRON <- function(data, p.zeroes, horizons, clusters, n_samples, condition
                                          conditional_on = conditional_on,
                                          clusters_size = clusters,
                                          n_samples = n_samples,
-                                         name = NA,
+                                         name = 'back_up_matrix',
                                          save = T,
                                          optim = T)
   if(save){

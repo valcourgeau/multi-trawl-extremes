@@ -1,30 +1,37 @@
 
-acf_trawl <- function(h, alpha, beta, rho, kappa, delta = 0.1){
-  seq_kappa <- seq(kappa, 50, by = delta)
+acf_trawl <- function(h, alpha, beta, rho, kappa, delta = 0.1, end_seq = 50){
+  seq_kappa <- seq(kappa, end_seq, by = delta)
   
   b_h_minus_0 <- - alpha  * (1-exp(-rho*h))
   b_0_minus_h <- - alpha  * (1-exp(-rho*h))
   b_0_h <- - alpha * exp(-rho*h)
   
   res <- 0
+  first_mom <- 0
   res_0 <- 0
   beta <- beta
+  
+  # first_mom <- 0
+ 
   for(x in seq_kappa){
     x <- x + delta / 2
+    # first_mom <- first_mom + (1+x/beta)^{-alpha}*(1+y/beta)^{-alpha}
     for(y in seq_kappa){
-      
       y <- y + delta / 2
-      res <- res + (1+x/beta)^{b_h_minus_0} * (1+(x+y)/beta)^{b_0_h} * (1+y/beta)^{b_0_minus_h} 
+      res <- res + (1+x/beta)^{b_h_minus_0} * (1+(x+y)/beta)^{b_0_h} * (1+y/beta)^{b_0_minus_h}
       res_0 <- res_0 + (1+(x+y)/beta)^{-alpha}
     }
   }
   
   res <- res * delta^2
   res_0 <- res_0 * delta^2
+  # first_mom <- first_mom * delta
   first_mom_sq <-  ((1+kappa/beta)^{-alpha}*(beta+kappa)/(alpha - 1))^2
-  res <- res - first_mom_sq
-  res_0 <- res_0 - first_mom_sq
-  return(res/res_0)
+  # print(res/res_0)
+  # print(first_mom^2)
+  # res <- (res - first_mom^2)^1 # first_mom_sq
+  # res_0 <- (res_0 - first_mom^2)^1 # first_mom_sq
+  return((res-first_mom_sq)/(res_0-first_mom_sq))
 }
 
 d_plus <- function(alpha, beta, kappa){
@@ -182,7 +189,7 @@ for(i in 1:6){
   depth <- 20
   kk <- acf(epd[,i], lag.max = depth, plot=F)
 
-  acf(epd[,i], lag.max = depth, ylab=paste('ACF', colnames(epd)[i]))
+  acf(epd[,i], lag.max = depth, ylab=paste('ACF', colnames(epd)[i]), cex.lab=1.5, cex.axis=1.5)
   lines(c(0.05, 1:depth), vapply(c(0.05, 1:depth), function(h){
     acf_trawl(h, alpha = alpha_tmp, beta = beta_tmp, kappa = kappa_tmp, 
               rho = rho_tmp, delta = 1)}, 1), col='red', lty=2, lwd=2)
@@ -213,9 +220,20 @@ for(i in 1:6){
   
   #plot(rho_tab %>% log, mse_tab)
   plot(rho_tab %>% log, mse_tab, type='o', 
-       xlab=paste('log-', expression(rho), '(green=MAE,orange=MSE)'), 
-       ylab='L1-Error with ACF', col = 'orange', lty = 2, cex=0.8, pch = 3)
-  lines(rho_tab %>% log, mae_tab, type='o', col = 'green', lty = 2, cex=0.8, pch = 9)
+       xlab= paste('log-rho'),#expression(rho), 
+       ylab='Error with ACF', col = 'orange', lty = 2, cex=1.2, pch = 3, cex.lab=1.5, cex.axis=1.5)
+  lines(rho_tab %>% log, mae_tab, type='o', col = 'green', lty = 2, cex=1.2, pch = 9)
+  legend("topright", 
+         legend = c("MAE", "MSE"), 
+         col = c('green', 
+                 'orange'), 
+         pch = c(3,9), 
+         bty = "n", 
+         pt.cex = 2, 
+         cex = 1.2, 
+         text.col = "black", 
+         horiz = F) 
+         #inset = c(0.1, 0.1))
   abline(v=log(rho_tmp), col ='red', lty=2, lwd=2)
   
   #rho_tmp <- rho_tab[which.min(mse_tab)]
@@ -232,7 +250,7 @@ for(i in 1:6){
   hist(epd[,i][epd[,i] >0 & epd[,i] < 20], 
        breaks = 100, probability = T, main = '', 
        ylab=paste('Density', colnames(epd)[i]),
-       xlab=paste(colnames(epd)[i], 'values'))
+       xlab=paste(colnames(epd)[i], 'values'),cex.lab=1.4, cex.axis=1.4)
   lines(0:2000/20, eva::dgpd(0:2000/20, shape = val_p3[i,1], scale=val_p3[i,2]), col = 'red', lty=2, lwd=2)
   
   # QQ-plot
@@ -244,10 +262,10 @@ for(i in 1:6){
   if (xi != 0) {
     y <- evir::qgpd(ppoints(data), xi = xi, beta = val_p3[i,2])
   }
-  plot(sort(data), y, xlab = "", ylab = "")
+  plot(sort(data), y, xlab = "", ylab = "", cex.lab=1.5, cex.axis=1.5)
   #title(xlab = paste(colnames(epd)[i], "(ordered)"), ylab = paste('GPD quantile', expression(xi), '=',round(xi,3)))
   abline(lsfit(sort(data), y))
-  title(xlab=paste(colnames(epd)[i], '(ordered)'), ylab=paste('GPD Quantile'))
+  title(xlab=paste(colnames(epd)[i], '(ordered)'), ylab=paste('GPD Quantile'), cex.lab=1.4)
   abline(v = quantile(epd[,i][epd[,i] >0], 0.95), col = 'blue', lwd = 1, lty = 4)
 }
 

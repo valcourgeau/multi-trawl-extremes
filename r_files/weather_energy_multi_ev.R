@@ -47,15 +47,48 @@ dim(core_energy_data)
 # data is a vector of data 
 core_energy_data_std <- apply(core_energy_data, MARGIN = 2,
                           FUN = function(x){(x)/sd(x)})
-
 stl_clean_aep <- stl(core_energy_data_std[,88] %>% (function(x){ts(x, frequency = 24)}), s.window = 1, t.window = 24*365/4)
-plot(stl_clean_aep, main="STL split for daily seasonality and quarterly trends")
-for(v_x in seq(0,1500,by=365)){abline(v=v_x, lty=2, col='darkgrey')}
+plot(stl_clean_aep)
+par(mfrow=c(4,1),mar=c(4.1,5.1,0.1,0.1))
+{
+plot((1:length(stl_clean_aep$time.series[1:18000,1]))/24,
+     ts(apply(stl_clean_aep$time.series[1:18000,] %>% as.matrix, 
+                         FUN = sum, MARGIN = 1), frequency = 24) %>% as.vector, 
+     main="", yaxt="n", ylab='Data', xaxt='n', xlab='Time (days)',
+     type='l', cex.lab=1.8)
+axis(2,cex.lab=3, cex.axis=1.7, ylab='Data')
+axis(1,cex.lab=3, cex.axis=1.7, ylab='Time (days)')
+for(v_x in seq(0,2500,by=365)){abline(v=v_x, lty=2, col='darkgrey')}
 
-clean_energy_data <- datasetSTLCleaning(data = core_energy_data_std, 
+plot((1:length(stl_clean_aep$time.series[1:18000,1]))/24,
+     stl_clean_aep$time.series[1:18000,1] %>% as.vector, 
+     main="", yaxt="n", ylab='Seasonal', xaxt='n', xlab='Time (days)',
+     type='l', cex.lab=1.8)
+axis(2,cex.lab=3, cex.axis=1.7, ylab='Seasonal')
+axis(1,cex.lab=3, cex.axis=1.7, ylab='Time (days)')
+for(v_x in seq(0,2500,by=365)){abline(v=v_x, lty=2, col='darkgrey')}
+
+plot((1:length(stl_clean_aep$time.series[1:18000,1]))/24,
+     stl_clean_aep$time.series[1:18000,2] %>% as.vector, 
+     main="", yaxt="n", ylab='Trend', xaxt='n', xlab='Time (days)',
+     type='l', cex.lab=1.8)
+axis(2,cex.lab=3, cex.axis=1.7, ylab='Trend')
+axis(1,cex.lab=3, cex.axis=1.7, xlab='Time (days)')
+for(v_x in seq(0,2500,by=365)){abline(v=v_x, lty=2, col='darkgrey')}
+
+plot((1:length(stl_clean_aep$time.series[1:18000,1]))/24,
+     stl_clean_aep$time.series[1:18000,3] %>% as.vector, 
+     main="", yaxt="n", ylab='Remainder', xaxt='n', xlab='Time (days)',
+     type='l', cex.lab=1.8)
+axis(2,cex.lab=3, cex.axis=1.7, ylab='Remainder')
+axis(1,cex.lab=3, cex.axis=1.7, xlab='Time (days)')
+for(v_x in seq(0,2500,by=365)){abline(v=v_x, lty=2, col='darkgrey')}
+}
+
+clean_energy_data <- datasetSTLCleaning(data = core_energy_data, 
                                         frequency = 24,
                                         trend_window = round(24*365/4),
-                                        season_window = 1)
+                                        season_window = 24)
 clean_energy_data <- datasetCleaning(data = clean_energy_data, dates = dates)
 
 tags_west_coast <- c(
@@ -82,16 +115,40 @@ clean_west_light_data <- getCoreData(data = clean_energy_data,
                                      get_tags = tags_west_coast_light)
 clean_east_light_data <- getCoreData(data = clean_energy_data, 
                                      get_tags = tags_east_coast_light)
-save(clean_east_light_data, file="clean_east_light_data.Rda")
+# save(clean_east_light_data, file="clean_east_light_data.Rda")
 load("clean_east_light_data.Rda")
+
 exc_test <- makeExceedances(data = clean_east_light_data,
                             thresholds = getThresholds(clean_east_light_data, 0.96))
-acf(exc_test[,10])
 
-p.zeroes_guess <- 0.96
+exc_test <- makeExceedances(data = clean_east_light_data,
+                            thresholds = getThresholds(clean_east_light_data, 0.96))
+set.seed(42)
+clean_east_light_data_jittered <- apply(clean_east_light_data, function(x){x+rnorm(length(x), mean = 0, 0.1*sd(x))}, MARGIN = 2)
+exc_test_jittered <- makeExceedances(data = clean_east_light_data_jittered,
+                            thresholds = getThresholds(clean_east_light_data_jittered, 0.96))
+acf(exc_test_jittered[,12])
+
+p.zeroes_guess <- rep(0.96, ncol(clean_east_light_data))
 clusters_guess <- ChoosingClusters(clean_east_light_data, p.zeroes_guess)
-horizons_guess <- c(1:6,12,24,48,72)
 clusters_guess
+horizons_guess <- c(1,2,3,6,12,24,48)
+clusters_guess <- rep(4, ncol(clean_east_light_data))
+
+setwd('~/GitHub/multi-trawl-extremes/r_files/')
+source('draw_acf.R')
+source('multi_ev.R')
+
+for(i in 1:32){
+  print(CustomMarginalMLE(exc_test_jittered[,i]))
+}
+
+
+
+
+
+
+
 
 # par(mfrow=c(8,8))
 # for(i in 1:64){
@@ -105,21 +162,54 @@ clusters_guess
 
 # ChoosingThresholds(clean_east_data, 0.96)
 
-tron_east_light <- computeTRON(data = clean_east_light_data,
+tron_east_light <- computeTRON(data = clean_east_light_data %>% as.data.frame() %>% as.matrix(),
                                p.zeroes = p.zeroes_guess,
                                horizons = horizons_guess,
                                clusters = clusters_guess,
-                               conditional_on = NA,
+                               conditional_on = 1:ncol(clean_east_light_data),
                                n_samples = 40000,
                                save = T,
                                sparse = F,
-                               name_matrices_file = paste("matrix_east_light_1_to_72_3rd"),
-                               name_vine_file = paste("vine_east_light_1_to_72_3rd"),
-                               name_tron_file = paste("tron_east_ligh_1_to_72_3rd"))
+                               name_matrices_file = paste("matrix_east_light_1_to_72_4th"),
+                               name_vine_file = paste("vine_east_light_1_to_72_4th"),
+                               name_tron_file = paste("tron_east_ligh_1_to_72_4th"))
 
 for(h in horizons_guess){
   print(t(tron_east_light[[h]]$mean[1:5,19]) %>% (function(x){round(x,2)}))
 }
+
+# create the final table
+
+CreateFinalTable <- function(tron_data, horizons, pick = 19){
+  tron_to_save <- matrix('o', ncol = length(vars_names), nrow = length(horizons_guess))
+  i <- 1
+  vars_names <- colnames(tron_east_light[[horizons[1]]]$mean)
+  reordered_vars <- c(19:20,1:18, which(grepl('sin', vars_names)), which(grepl('cos', vars_names)))
+  for(h in horizons){
+    tron_mat <- tron_data[[h]]$mean[pick,]
+    tron_mat_sd <- tron_data[[h]]$sd[pick,]
+    
+    
+    
+    # reordering
+    
+    tron_to_save[i,] <- apply(rbind(tron_mat[reordered_vars], tron_mat_sd[reordered_vars]), 
+                              FUN = function(x){
+                                paste(round(x[1], 2),' (', round(x[2] / sqrt(200), 3), ')', sep = '0')
+                                      },
+                              MARGIN = 2)
+    i <- i + 1
+  }
+  colnames(tron_to_save) <- vars_names[reordered_vars]
+  rownames(tron_to_save) <- horizons
+  return(tron_to_save)
+}
+
+final_table <- CreateFinalTable(tron_data = tron_east_light,
+                 horizons = horizons_guess,
+                 pick = 19) %>% t
+
+write.csv(final_table, '~/GitHub/multi-trawl-extremes/results/weather-energy-tron-v3.csv')
 
 
 indices_show <- c(19, 20, 1:18, 21:32)
