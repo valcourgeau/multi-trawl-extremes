@@ -88,7 +88,7 @@ for(v_x in seq(0,2500,by=365)){abline(v=v_x, lty=2, col='darkgrey')}
 clean_energy_data <- datasetSTLCleaning(data = core_energy_data, 
                                         frequency = 24,
                                         trend_window = round(24*365/4),
-                                        season_window = 24)
+                                        season_window = round(24*365/4))
 clean_energy_data <- datasetCleaning(data = clean_energy_data, dates = dates)
 
 tags_west_coast <- c(
@@ -115,7 +115,7 @@ clean_west_light_data <- getCoreData(data = clean_energy_data,
                                      get_tags = tags_west_coast_light)
 clean_east_light_data <- getCoreData(data = clean_energy_data, 
                                      get_tags = tags_east_coast_light)
-# save(clean_east_light_data, file="clean_east_light_data.Rda")
+# save(clean_east_light_data, file="clean_east_light_data_v2.Rda")
 load("clean_east_light_data.Rda")
 
 exc_test <- makeExceedances(data = clean_east_light_data,
@@ -127,7 +127,7 @@ set.seed(42)
 clean_east_light_data_jittered <- apply(clean_east_light_data, function(x){x+rnorm(length(x), mean = 0, 0.1*sd(x))}, MARGIN = 2)
 exc_test_jittered <- makeExceedances(data = clean_east_light_data_jittered,
                             thresholds = getThresholds(clean_east_light_data_jittered, 0.96))
-acf(exc_test_jittered[,12])
+acf(exc_test_jittered[,1])
 
 p.zeroes_guess <- rep(0.96, ncol(clean_east_light_data))
 clusters_guess <- ChoosingClusters(clean_east_light_data, p.zeroes_guess)

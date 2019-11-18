@@ -34,6 +34,11 @@ acf_trawl <- function(h, alpha, beta, rho, kappa, delta = 0.1, end_seq = 50){
   return((res-first_mom_sq)/(res_0-first_mom_sq))
 }
 
+acf_trawl_num_approx <- function(h, alpha, beta, kappa, rho, delta=0.5){
+  vapply(h, function(h){
+  acf_trawl(h, alpha = alpha, beta = beta, kappa = kappa, 
+            rho = rho, delta = delta)}, 1)}
+
 d_plus <- function(alpha, beta, kappa){
   val <- beta^2 / ((alpha - 2) * (alpha - 1))
   val <- val*(log(1+2*kappa/beta) + (2*alpha-3)/((alpha-2)*(alpha-1)))
@@ -94,6 +99,7 @@ acf_trawl_approx <- function(h, alpha, beta, kappa, rho){
  return(acf_vals)
 }
 
+val_p3 <- read.table( '~/GitHub/multi-trawl-extremes/results/air_pollution_model_params')
 al <- 1/val_p3[1,1]
 be <- val_p3[1,2]/val_p3[1,1] - val_p3[1,4]
 ka <- val_p3[1,4]
